@@ -131,7 +131,11 @@ export class RuntimeService {
 
   private isEncrypted(profile: BrokerConnectionConfig) { return Boolean(profile.encryption) || profile.protocol === "mqtts" || profile.protocol === "wss"; }
   private transportProtocol(profile: BrokerConnectionConfig) { const protocol = profile.protocol.replace("://", ""); if (this.isEncrypted(profile)) return protocol === "ws" || protocol === "wss" ? "wss" : "mqtts"; return protocol === "ws" ? "ws" : "mqtt"; }
-  private connectionUrl(profile: BrokerConnectionConfig) { return `${this.transportProtocol(profile)}://${profile.host}:${profile.port}`; }
+  private connectionUrl(profile: BrokerConnectionConfig) {
+    const protocol = this.transportProtocol(profile);
+    const websocketPath = protocol === "ws" || protocol === "wss" ? "/mqtt" : "";
+    return `${protocol}://${profile.host.trim()}:${profile.port}${websocketPath}`;
+  }
   private createBrokerClient(profile: BrokerConnectionConfig) { return mqtt.connect(this.connectionUrl(profile), this.buildOptionsFromConnection(profile)); }
 
   private awaitBrokerConnection(client: MqttClient) {
