@@ -791,7 +791,6 @@ h1 {
 
 .custom-function-row {
   position: relative;
-  grid-template-columns: minmax(0, 1fr) auto;
 }
 
 .custom-function-content {
@@ -801,8 +800,11 @@ h1 {
 }
 
 .custom-function-actions {
+  position: absolute;
+  top: 0.55rem;
+  right: 0.55rem;
   display: flex;
-  align-items: start;
+  align-items: center;
   gap: 0.2rem;
   opacity: 0;
   transition: opacity 160ms ease;
@@ -829,6 +831,17 @@ h1 {
 
 .custom-function-modal {
   width: min(560px, calc(100vw - 2rem));
+}
+
+.custom-function-value-field {
+  display: grid;
+  gap: 0.35rem;
+}
+
+.custom-function-modal .payload-editor-shell {
+  height: 240px;
+  min-height: 240px;
+  flex: 0 0 240px;
 }
 
 .connection-manager,
@@ -1283,8 +1296,11 @@ h1 {
   padding-right: 0.25rem;
 }
 
-.inspector-card .function-guide {
+.inspector-card > .stack > .function-guide {
+  flex: 1 1 0;
+  min-height: 0;
   overflow-y: auto;
+  overscroll-behavior: contain;
 }
 
 .request-editor-empty {

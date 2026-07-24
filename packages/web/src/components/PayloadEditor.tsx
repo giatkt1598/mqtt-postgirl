@@ -47,11 +47,18 @@ export interface PayloadEditorVariable {
   value: string;
 }
 
+export interface PayloadEditorCustomFunction {
+  name: string;
+  description: string | null;
+  value: string;
+}
+
 export interface PayloadEditorProps {
   requestId: string;
   value: string;
   language: PayloadEditorLanguage;
   variables: PayloadEditorVariable[];
+  customFunctions?: PayloadEditorCustomFunction[];
   onChange: (value: string) => void;
 }
 
@@ -80,18 +87,40 @@ const builtinSuggestions = [
 
 type TemplateCompletionRegistry = {
   provider: monaco.IDisposable | null;
+  version: number;
+  contexts: Map<
+    string,
+    {
+      variablesRef: { current: PayloadEditorVariable[] };
+      customFunctionsRef: { current: PayloadEditorCustomFunction[] };
+    }
+  >;
 };
 
 const completionRegistryKey = "__mqttPostgirlTemplateCompletionRegistry";
+const completionRegistryVersion = 2;
 
 function getCompletionRegistry(): TemplateCompletionRegistry {
   const existing = Reflect.get(
     globalThis,
     completionRegistryKey,
   ) as TemplateCompletionRegistry | undefined;
-  if (existing) return existing;
+  if (existing) {
+    if (existing.version !== completionRegistryVersion) {
+      existing.provider?.dispose();
+      existing.provider = null;
+      existing.contexts = new Map();
+      existing.version = completionRegistryVersion;
+    }
+    if (!existing.contexts) existing.contexts = new Map();
+    return existing;
+  }
 
-  const registry: TemplateCompletionRegistry = { provider: null };
+  const registry: TemplateCompletionRegistry = {
+    provider: null,
+    version: completionRegistryVersion,
+    contexts: new Map(),
+  };
   Reflect.set(globalThis, completionRegistryKey, registry);
   return registry;
 }
@@ -142,19 +171,22 @@ export function PayloadEditor({
   value,
   language,
   variables,
+  customFunctions = [],
   onChange,
 }: PayloadEditorProps) {
   const variablesRef = useRef(variables);
+  const customFunctionsRef = useRef(customFunctions);
   const editorRef = useRef<monaco.editor.IStandaloneCodeEditor | null>(null);
   const latestEditorValueRef = useRef(value);
   const pendingLocalEditRef = useRef(false);
   const previousRequestIdRef = useRef(requestId);
   const updateDecorationsRef = useRef<() => void>(() => undefined);
   variablesRef.current = variables;
+  customFunctionsRef.current = customFunctions;
 
   useEffect(() => {
     updateDecorationsRef.current();
-  }, [variables]);
+  }, [variables, customFunctions]);
 
   useEffect(() => {
     const editor = editorRef.current;
@@ -189,7 +221,10 @@ export function PayloadEditor({
   const handleMount: OnMount = (editor, monacoInstance) => {
     editorRef.current = editor;
     const completionRegistry = getCompletionRegistry();
-    completionRegistry.provider?.dispose();
+    const modelKey = editor.getModel()?.uri.toString();
+    if (modelKey) {
+      completionRegistry.contexts.set(modelKey, { variablesRef, customFunctionsRef });
+    }
     monacoInstance.editor.defineTheme("mqtt-postgirl-dark", {
       base: "vs-dark",
       inherit: true,
@@ -209,9 +244,10 @@ export function PayloadEditor({
       },
     });
 
-    const provider = monacoInstance.languages.registerCompletionItemProvider(
-      ["json", "xml", "plaintext"],
-      {
+    if (!completionRegistry.provider) {
+      completionRegistry.provider = monacoInstance.languages.registerCompletionItemProvider(
+        ["json", "xml", "plaintext"],
+        {
         triggerCharacters: ["{", "$"],
         provideCompletionItems(
           model: monaco.editor.ITextModel,
@@ -249,11 +285,26 @@ export function PayloadEditor({
                 });
               }
             }
+            const editorContext = completionRegistry.contexts.get(model.uri.toString());
+            for (const customFunction of editorContext?.customFunctionsRef.current ?? []) {
+              if (!customFunction.name.toLowerCase().startsWith(normalizedToken)) continue;
+              const label = `{{${customFunction.name}}}`;
+              if (suggestions.some((suggestion) => suggestion.label === label)) continue;
+              suggestions.push({
+                label,
+                filterText: label,
+                kind: monacoInstance.languages.CompletionItemKind.Function,
+                detail: customFunction.description || customFunction.value || "Custom function",
+                insertText: label,
+                range: completionRange,
+              });
+            }
           }
 
           if (context.kind === "variable") {
             const variablePrefix = token.toLowerCase();
-            for (const variable of variablesRef.current) {
+            const editorContext = completionRegistry.contexts.get(model.uri.toString());
+            for (const variable of editorContext?.variablesRef.current ?? []) {
               if (!variableNamePattern.test(variable.name)) continue;
               if (!variable.name.toLowerCase().startsWith(variablePrefix)) continue;
               suggestions.push({
@@ -271,9 +322,9 @@ export function PayloadEditor({
           // filtering the initial built-in list from the {{ trigger.
           return { suggestions, incomplete: true };
         },
-      },
-    );
-    completionRegistry.provider = provider;
+        },
+      );
+    }
     monacoInstance.editor.setTheme("mqtt-postgirl-dark");
     let decorationIds: string[] = [];
     const triggerTemplateSuggestions = () => {
@@ -328,10 +379,7 @@ export function PayloadEditor({
     return () => {
       contentDisposable.dispose();
       cursorDisposable.dispose();
-      provider.dispose();
-      if (completionRegistry.provider === provider) {
-        completionRegistry.provider = null;
-      }
+      if (modelKey) completionRegistry.contexts.delete(modelKey);
       if (editorRef.current === editor) {
         editorRef.current = null;
       }

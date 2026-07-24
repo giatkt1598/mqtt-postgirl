@@ -492,6 +492,11 @@ export default function App() {
         )
         .map((variable) => ({ name: variable.name, value: variable.value }))
     : [];
+  const payloadEditorCustomFunctions = customFunctions.map((customFunction) => ({
+    name: customFunction.name,
+    description: customFunction.description,
+    value: customFunction.value,
+  }));
 
   const updateCollectionVariables = async (variableCollectionId: string) => {
     if (!selectedCollection) return;
@@ -1797,6 +1802,7 @@ export default function App() {
                 value={draft.payloadTemplate}
                 language={payloadEditorLanguage}
                 variables={payloadEditorVariables}
+                customFunctions={payloadEditorCustomFunctions}
                 onChange={(payloadTemplate) =>
                   setDraft((current) => ({ ...current, payloadTemplate }))
                 }
@@ -2137,7 +2143,7 @@ export default function App() {
                               <div className="custom-function-content">
                                 <code>{`{{${customFunction.name}}}`}</code>
                                 {customFunction.description && <span>{customFunction.description}</span>}
-                                <pre>{customFunction.value}</pre>
+                                <pre>{JSON.stringify({ custom: customFunction.value })}</pre>
                               </div>
                               <div className="custom-function-actions">
                                 <button
@@ -2420,19 +2426,19 @@ export default function App() {
                 }
               />
             </label>
-            <label>
-              Value
-              <textarea
-                rows={6}
+            <div className="custom-function-value-field">
+              <span>Value</span>
+              <PayloadEditor
+                requestId={customFunctionDraft.id || "new-custom-function"}
                 value={customFunctionDraft.value}
-                onChange={(event) =>
-                  setCustomFunctionDraft({
-                    ...customFunctionDraft,
-                    value: event.target.value,
-                  })
+                language="plaintext"
+                variables={payloadEditorVariables}
+                customFunctions={payloadEditorCustomFunctions}
+                onChange={(value) =>
+                  setCustomFunctionDraft((current) => ({ ...current, value }))
                 }
               />
-            </label>
+            </div>
             {customFunctionError && (
               <div className="form-error">{customFunctionError}</div>
             )}
