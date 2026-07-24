@@ -132,7 +132,7 @@ export default function App() {
     () => {
       try {
         return JSON.parse(
-          localStorage.getItem("mqtt-postwoman.expandedCollections") ?? "[]",
+          localStorage.getItem("mqtt.expandedCollections") ?? "[]",
         ) as string[];
       } catch {
         return [];
@@ -153,7 +153,7 @@ export default function App() {
     () => {
       try {
         return JSON.parse(
-          localStorage.getItem("mqtt-postwoman.favoriteCollections") ?? "[]",
+          localStorage.getItem("mqtt.favoriteCollections") ?? "[]",
         ) as string[];
       } catch {
         return [];
@@ -161,7 +161,7 @@ export default function App() {
     },
   );
   const [activeConnectionId, setActiveConnectionId] = useState<string>(
-    () => localStorage.getItem("mqtt-postwoman.activeConnectionId") ?? "",
+    () => localStorage.getItem("mqtt.activeConnectionId") ?? "",
   );
   const [rightTab, setRightTab] = useState<RightTab>("history");
   const [draft, setDraft] = useState<DraftRequest>(emptyDraft());
@@ -173,14 +173,14 @@ export default function App() {
   const [consumerTopics, setConsumerTopics] = useState("device/+/status");
   const [consumerTopicColor, setConsumerTopicColor] = useState(
     () =>
-      localStorage.getItem("mqtt-postwoman.consumerTopicColor") ?? "#4fd1c5",
+      localStorage.getItem("mqtt.consumerTopicColor") ?? "#4fd1c5",
   );
   const [inactiveConsumerTopics, setInactiveConsumerTopics] = useState<
     InactiveConsumerTopic[]
   >(() => {
     try {
       return JSON.parse(
-        localStorage.getItem("mqtt-postwoman.inactiveConsumerTopics") ?? "[]",
+        localStorage.getItem("mqtt.inactiveConsumerTopics") ?? "[]",
       ) as InactiveConsumerTopic[];
     } catch {
       return [];
@@ -189,7 +189,7 @@ export default function App() {
   const [consumerTopicOrder, setConsumerTopicOrder] = useState<string[]>(() => {
     try {
       return JSON.parse(
-        localStorage.getItem("mqtt-postwoman.consumerTopicOrder") ?? "[]",
+        localStorage.getItem("mqtt.consumerTopicOrder") ?? "[]",
       ) as string[];
     } catch {
       return [];
@@ -198,7 +198,7 @@ export default function App() {
   const [topicColors, setTopicColors] = useState<Record<string, string>>(() => {
     try {
       return JSON.parse(
-        localStorage.getItem("mqtt-postwoman.topicColors") ?? "{}",
+        localStorage.getItem("mqtt.topicColors") ?? "{}",
       ) as Record<string, string>;
     } catch {
       return {};
@@ -246,8 +246,10 @@ export default function App() {
   const [visibleLiveMessageCount, setVisibleLiveMessageCount] = useState(25);
   const [unreadConsumerMessages, setUnreadConsumerMessages] = useState(0);
   const [historyLogs, setHistoryLogs] = useState<MessageLogRow[]>([]);
-  const [watchConsumerLogs, setWatchConsumerLogs] = useState(true);
-  const watchConsumerLogsRef = useRef(true);
+  const [watchConsumerLogs, setWatchConsumerLogs] = useState(
+    () => localStorage.getItem("mqtt.watchConsumerLogs") !== "false",
+  );
+  const watchConsumerLogsRef = useRef(watchConsumerLogs);
   const consumerLogResumeAfterRef = useRef<number | null>(null);
   const pendingRealtimeLogsRef = useRef<MessageLogRow[]>([]);
   const pendingConsumerMessagesRef = useRef<ConsumerMessageEvent[]>([]);
@@ -373,10 +375,17 @@ export default function App() {
 
   useEffect(() => {
     localStorage.setItem(
-      "mqtt-postwoman.activeConnectionId",
+      "mqtt.activeConnectionId",
       activeConnectionId,
     );
   }, [activeConnectionId]);
+
+  useEffect(() => {
+    localStorage.setItem(
+      "mqtt.watchConsumerLogs",
+      String(watchConsumerLogs),
+    );
+  }, [watchConsumerLogs]);
 
   useEffect(() => {
     let ws: WebSocket | null = null;
@@ -677,7 +686,7 @@ export default function App() {
       if (current.includes(collection.id)) return current;
       const next = [...current, collection.id];
       localStorage.setItem(
-        "mqtt-postwoman.expandedCollections",
+        "mqtt.expandedCollections",
         JSON.stringify(next),
       );
       return next;
@@ -697,7 +706,7 @@ export default function App() {
         ? current.filter((id) => id !== collectionId)
         : [...current, collectionId];
       localStorage.setItem(
-        "mqtt-postwoman.expandedCollections",
+        "mqtt.expandedCollections",
         JSON.stringify(next),
       );
       return next;
@@ -785,7 +794,7 @@ export default function App() {
         const next = current.includes(result.collection.id)
           ? current
           : [...current, result.collection.id];
-        localStorage.setItem("mqtt-postwoman.expandedCollections", JSON.stringify(next));
+        localStorage.setItem("mqtt.expandedCollections", JSON.stringify(next));
         return next;
       });
       setCollectionModal(null);
@@ -820,7 +829,7 @@ export default function App() {
     setFavoriteCollectionIds((current) => {
       const next = current.filter((id) => id !== collectionId);
       localStorage.setItem(
-        "mqtt-postwoman.favoriteCollections",
+        "mqtt.favoriteCollections",
         JSON.stringify(next),
       );
       return next;
@@ -832,7 +841,7 @@ export default function App() {
     setExpandedCollectionIds((current) => {
       const next = current.filter((id) => id !== collectionId);
       localStorage.setItem(
-        "mqtt-postwoman.expandedCollections",
+        "mqtt.expandedCollections",
         JSON.stringify(next),
       );
       return next;
@@ -1009,7 +1018,7 @@ export default function App() {
         if (current.includes(targetCollectionId)) return current;
         const next = [...current, targetCollectionId];
         localStorage.setItem(
-          "mqtt-postwoman.expandedCollections",
+          "mqtt.expandedCollections",
           JSON.stringify(next),
         );
         return next;
@@ -1139,7 +1148,7 @@ export default function App() {
         ? current.filter((id) => id !== collectionId)
         : [collectionId, ...current];
       localStorage.setItem(
-        "mqtt-postwoman.favoriteCollections",
+        "mqtt.favoriteCollections",
         JSON.stringify(next),
       );
       return next;
@@ -1305,7 +1314,7 @@ export default function App() {
         if (!next.includes(key)) next.push(key);
       }
       localStorage.setItem(
-        "mqtt-postwoman.consumerTopicOrder",
+        "mqtt.consumerTopicOrder",
         JSON.stringify(next),
       );
       return next;
@@ -1325,7 +1334,7 @@ export default function App() {
         ...knownKeys.filter((key) => !current.includes(key)),
       ].filter((key, index, keys) => keys.indexOf(key) === index);
       localStorage.setItem(
-        "mqtt-postwoman.consumerTopicOrder",
+        "mqtt.consumerTopicOrder",
         JSON.stringify(next),
       );
       return next;
@@ -1376,7 +1385,7 @@ export default function App() {
         const next = { ...current };
         for (const topic of topics) next[topic] = consumerTopicColor;
         localStorage.setItem(
-          "mqtt-postwoman.topicColors",
+          "mqtt.topicColors",
           JSON.stringify(next),
         );
         return next;
@@ -1384,7 +1393,7 @@ export default function App() {
       setConsumerTopics("");
       const nextColor = randomTopicColor();
       setConsumerTopicColor(nextColor);
-      localStorage.setItem("mqtt-postwoman.consumerTopicColor", nextColor);
+      localStorage.setItem("mqtt.consumerTopicColor", nextColor);
       setInactiveConsumerTopics((current) => {
         const next = current.filter(
           (item) =>
@@ -1392,7 +1401,7 @@ export default function App() {
             !topics.includes(item.topic),
         );
         localStorage.setItem(
-          "mqtt-postwoman.inactiveConsumerTopics",
+          "mqtt.inactiveConsumerTopics",
           JSON.stringify(next),
         );
         return next;
@@ -1423,7 +1432,7 @@ export default function App() {
           item,
         ];
         localStorage.setItem(
-          "mqtt-postwoman.inactiveConsumerTopics",
+          "mqtt.inactiveConsumerTopics",
           JSON.stringify(next),
         );
         return next;
@@ -1459,7 +1468,7 @@ export default function App() {
       setTopicColors((current) => {
         const next = { ...current, [item.topic]: getTopicColor(item.topic) };
         localStorage.setItem(
-          "mqtt-postwoman.topicColors",
+          "mqtt.topicColors",
           JSON.stringify(next),
         );
         return next;
@@ -1467,7 +1476,7 @@ export default function App() {
       setInactiveConsumerTopics((current) => {
         const next = current.filter((entry) => entry.key !== item.key);
         localStorage.setItem(
-          "mqtt-postwoman.inactiveConsumerTopics",
+          "mqtt.inactiveConsumerTopics",
           JSON.stringify(next),
         );
         return next;
@@ -1483,7 +1492,7 @@ export default function App() {
     setInactiveConsumerTopics((current) => {
       const next = current.filter((item) => item.key !== key);
       localStorage.setItem(
-        "mqtt-postwoman.inactiveConsumerTopics",
+        "mqtt.inactiveConsumerTopics",
         JSON.stringify(next),
       );
       return next;
@@ -1491,7 +1500,7 @@ export default function App() {
     setConsumerTopicOrder((current) => {
       const next = current.filter((item) => item !== key);
       localStorage.setItem(
-        "mqtt-postwoman.consumerTopicOrder",
+        "mqtt.consumerTopicOrder",
         JSON.stringify(next),
       );
       return next;
@@ -2135,7 +2144,7 @@ export default function App() {
                           onChange={(event) => {
                             setConsumerTopicColor(event.target.value);
                             localStorage.setItem(
-                              "mqtt-postwoman.consumerTopicColor",
+                              "mqtt.consumerTopicColor",
                               event.target.value,
                             );
                           }}
