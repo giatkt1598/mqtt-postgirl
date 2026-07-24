@@ -212,6 +212,7 @@ export default function App() {
   const [historyLogs, setHistoryLogs] = useState<MessageLogRow[]>([]);
   const [watchConsumerLogs, setWatchConsumerLogs] = useState(true);
   const watchConsumerLogsRef = useRef(true);
+  const consumerLogResumeAfterRef = useRef<number | null>(null);
   const [error, setError] = useState<string>("");
   const [deleteConfirmation, setDeleteConfirmation] =
     useState<DeleteConfirmation | null>(null);
@@ -220,13 +221,17 @@ export default function App() {
   const mergeWatchedLogs = (
     current: MessageLogRow[],
     incoming: MessageLogRow[],
-  ) =>
-    mergeLogs(
-      current,
-      watchConsumerLogsRef.current
-        ? incoming
-        : incoming.filter((log) => log.direction !== "consume"),
-    );
+  ) => {
+    const resumeAfter = consumerLogResumeAfterRef.current;
+    const visibleIncoming = incoming.filter((log) => {
+      if (log.direction !== "consume") return true;
+      if (!watchConsumerLogsRef.current) return false;
+      if (resumeAfter === null) return true;
+      const createdAt = Date.parse(log.createdAt);
+      return Number.isNaN(createdAt) || createdAt > resumeAfter;
+    });
+    return mergeLogs(current, visibleIncoming);
+  };
 
   const closeActionPopover = () => {
     setCollectionMenuId(null);
@@ -2149,14 +2154,11 @@ export default function App() {
                             onChange={(event) => {
                               const enabled = event.target.checked;
                               watchConsumerLogsRef.current = enabled;
-                              setWatchConsumerLogs(enabled);
-                              if (!enabled) {
-                                setHistoryLogs((current) =>
-                                  current.filter(
-                                    (log) => log.direction !== "consume",
-                                  ),
-                                );
+                              if (enabled) {
+                                // Do not backfill messages received while watching was off.
+                                consumerLogResumeAfterRef.current = Date.now();
                               }
+                              setWatchConsumerLogs(enabled);
                             }}
                           />
                           Watch consumer
