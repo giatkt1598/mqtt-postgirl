@@ -2,6 +2,7 @@ import { DragEvent } from "react";
 import { CollectionRow, DraftRequest, RequestRow } from "../models";
 import { isRequestModified } from "../utilities";
 import { useWorkspaceContext } from "../contexts";
+import { ScrollArea } from "./ScrollArea";
 
 export interface CollectionSidebarProps {
   collections: CollectionRow[];
@@ -82,7 +83,8 @@ export function CollectionSidebar() {
         </div>
       </div>
       <div className="sidebar-panel">
-        <div className="panel-header">
+        <ScrollArea className="collection-scroll-area">
+          <div className="panel-header">
           <span>Collections</span>
           <span className="flex-1" />
           <button
@@ -102,7 +104,7 @@ export function CollectionSidebar() {
             +
           </button>
         </div>
-        <div className="collection-list mt-2">
+          <div className="collection-list mt-2">
           {collections.map((collection) => {
             const collectionRequests = requests.filter(
               (request) => request.collectionId === collection.id,
@@ -255,7 +257,8 @@ export function CollectionSidebar() {
               </div>
             );
           })}
-        </div>
+          </div>
+        </ScrollArea>
       </div>
     </aside>
   );

@@ -7,6 +7,7 @@ import {
   CollectionSidebar,
   PayloadEditor,
   QosSelect,
+  ScrollArea,
   TopicAutocomplete,
   WorkspaceHeader,
 } from "./components";
@@ -500,32 +501,6 @@ export default function App() {
       );
     }
   }, [draft]);
-
-  useEffect(() => {
-    const timers = new Map<HTMLElement, ReturnType<typeof setTimeout>>();
-    const scrollTargets = document.querySelectorAll<HTMLElement>(
-      ".sidebar-panel, .inspector-card .log-list, .inspector-card > .stack > .function-guide",
-    );
-    const handleScroll = (event: Event) => {
-      const target = event.currentTarget;
-      if (!(target instanceof HTMLElement)) return;
-      const timer = timers.get(target);
-      if (timer) clearTimeout(timer);
-      target.classList.add("is-scrolling");
-      timers.set(
-        target,
-        setTimeout(() => {
-          target.classList.remove("is-scrolling");
-          timers.delete(target);
-        }, 650),
-      );
-    };
-    scrollTargets.forEach((target) => target.addEventListener("scroll", handleScroll));
-    return () => {
-      scrollTargets.forEach((target) => target.removeEventListener("scroll", handleScroll));
-      timers.forEach((timer) => clearTimeout(timer));
-    };
-  }, [mainTab, rightTab]);
 
   const selectedCollection = collections.find(
     (collection) => collection.id === selectedCollectionId,
@@ -2198,32 +2173,35 @@ export default function App() {
                         Clear
                       </button>
                     </div>
-                    <div className="log-list">
-                      {logs.map((log) => (
-                        <div
-                          key={log.id}
-                          className={`log-row ${log.direction}`}
-                        >
-                          <div className="log-top">
-                            <strong>{log.topic}</strong>
-                            <span>{log.direction}</span>
+                    <ScrollArea className="log-scroll-area">
+                      <div className="log-list">
+                        {logs.map((log) => (
+                          <div
+                            key={log.id}
+                            className={`log-row ${log.direction}`}
+                          >
+                            <div className="log-top">
+                              <strong>{log.topic}</strong>
+                              <span>{log.direction}</span>
+                            </div>
+                            <small>{formatTime(log.createdAt)}</small>
+                            <pre>{log.payloadText}</pre>
                           </div>
-                          <small>{formatTime(log.createdAt)}</small>
-                          <pre>{log.payloadText}</pre>
-                        </div>
-                      ))}
-                    </div>
+                        ))}
+                      </div>
+                    </ScrollArea>
                   </div>
                 </div>
               )}
 
               {rightTab === "functions" && (
                 <div className="stack">
-                  <div className="card-section function-guide">
+                  <div className="card-section function-section">
+                    <ScrollArea className="function-guide function-scroll-area">
                     <div className="section-head">
                       <span>Built-in functions</span>
                     </div>
-                    <p>
+                    <p className="function-description">
                       Use these tokens directly inside topic or payload
                       templates.
                     </p>
@@ -2265,7 +2243,9 @@ export default function App() {
                       <div className="section-head">
                         <div className="section-title-stack">
                           <span>Custom functions</span>
-                          <small>Reusable values for topic and payload templates.</small>
+                          <small className="function-description">
+                            Reusable values for topic and payload templates.
+                          </small>
                         </div>
                         <button
                           className="icon-button"
@@ -2318,6 +2298,7 @@ export default function App() {
                         )}
                       </div>
                     </div>
+                    </ScrollArea>
                   </div>
                 </div>
               )}

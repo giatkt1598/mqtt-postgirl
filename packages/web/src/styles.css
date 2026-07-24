@@ -199,79 +199,85 @@ label {
 }
 
 .sidebar-panel {
+  display: flex;
   min-height: 0;
-  overflow-x: hidden;
-  overflow-y: auto;
   padding: 0.95rem;
   margin-bottom: 0.3rem;
   flex: 1;
 }
 
-/* Keep workspace sidebars compact without styling the Monaco editor scrollbar. */
-.sidebar-panel,
-.inspector-card .log-list,
-.inspector-card > .stack > .function-guide {
-  scrollbar-width: thin;
-  scrollbar-color: transparent transparent;
+.scroll-area {
+  position: relative;
+  display: block;
+  min-width: 0;
+  min-height: 0;
 }
 
-.sidebar-panel::-webkit-scrollbar,
-.inspector-card .log-list::-webkit-scrollbar,
-.inspector-card > .stack > .function-guide::-webkit-scrollbar {
-  width: 6px;
+.collection-scroll-area,
+.log-scroll-area,
+.function-scroll-area {
+  flex: 1 1 auto;
+  min-height: 0;
 }
 
-.sidebar-panel::-webkit-scrollbar-button,
-.sidebar-panel::-webkit-scrollbar-button:vertical:decrement,
-.sidebar-panel::-webkit-scrollbar-button:vertical:increment,
-.inspector-card .log-list::-webkit-scrollbar-button,
-.inspector-card .log-list::-webkit-scrollbar-button:vertical:decrement,
-.inspector-card .log-list::-webkit-scrollbar-button:vertical:increment,
-.inspector-card > .stack > .function-guide::-webkit-scrollbar-button {
-  -webkit-appearance: none;
+/* Match the native scrollbar position at the panel's right edge. */
+.collection-scroll-area {
+  margin-right: -0.95rem;
+}
+
+.collection-scroll-area .scroll-area-content {
+  padding-right: 0.95rem;
+}
+
+.log-scroll-area,
+.function-scroll-area {
+  margin-right: -0.9rem;
+}
+
+.log-scroll-area .scroll-area-content,
+.function-scroll-area .scroll-area-content {
+  padding-right: 0.9rem;
+}
+
+.scroll-area-viewport {
+  position: absolute;
+  inset: 0;
+  overflow: auto;
+  scrollbar-width: none;
+}
+
+.scroll-area-viewport::-webkit-scrollbar {
   display: none;
-  height: 0;
-  width: 0;
 }
 
-.sidebar-panel::-webkit-scrollbar-track,
-.inspector-card .log-list::-webkit-scrollbar-track,
-.inspector-card > .stack > .function-guide::-webkit-scrollbar-track {
-  background: transparent;
+.scroll-area-content {
+  min-height: 100%;
 }
 
-.sidebar-panel::-webkit-scrollbar-thumb,
-.inspector-card .log-list::-webkit-scrollbar-thumb,
-.inspector-card > .stack > .function-guide::-webkit-scrollbar-thumb {
-  background: transparent;
-  border: 1px solid transparent;
+.scroll-area-track {
+  position: absolute;
+  top: 4px;
+  right: 0;
+  bottom: 4px;
+  width: 6px;
+  pointer-events: none;
+}
+
+.scroll-area-track.is-overflowing {
+  pointer-events: auto;
+}
+
+.scroll-area-thumb {
+  width: 100%;
+  background: rgba(148, 163, 184, 0.7);
   border-radius: 999px;
-  background-clip: padding-box;
-  transition: background-color 180ms ease-out;
+  opacity: 0;
+  cursor: pointer;
+  transition: opacity 180ms ease-out;
 }
 
-.sidebar-panel.is-scrolling,
-.sidebar-panel:hover,
-.inspector-card .log-list.is-scrolling,
-.inspector-card .log-list:hover,
-.inspector-card > .stack > .function-guide.is-scrolling,
-.inspector-card > .stack > .function-guide:hover {
-  scrollbar-color: rgba(148, 163, 184, 0.7) transparent;
-}
-
-.sidebar-panel.is-scrolling::-webkit-scrollbar-thumb,
-.sidebar-panel:hover::-webkit-scrollbar-thumb,
-.inspector-card .log-list.is-scrolling::-webkit-scrollbar-thumb,
-.inspector-card .log-list:hover::-webkit-scrollbar-thumb,
-.inspector-card > .stack > .function-guide.is-scrolling::-webkit-scrollbar-thumb,
-.inspector-card > .stack > .function-guide:hover::-webkit-scrollbar-thumb {
-  background-color: rgba(148, 163, 184, 0.7);
-  animation: sidebar-scrollbar-fade-in 180ms ease-out;
-}
-
-@keyframes sidebar-scrollbar-fade-in {
-  from { background-color: transparent; }
-  to { background-color: rgba(148, 163, 184, 0.7); }
+.scroll-area-thumb.is-visible {
+  opacity: 1;
 }
 
 .panel-header,
@@ -805,6 +811,10 @@ h1 {
 .function-guide p {
   color: var(--muted);
   font-size: 0.85rem;
+}
+
+.function-description {
+  margin-bottom: 8px;
 }
 
 .section-title-stack {
@@ -1367,17 +1377,21 @@ h1 {
 }
 
 .inspector-card .log-list {
-  flex: 1 1 auto;
-  min-height: 0;
   align-content: start;
-  overflow-y: auto;
   padding-right: 0.25rem;
 }
 
-.inspector-card > .stack > .function-guide {
+.inspector-card > .stack > .function-section {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.inspector-card .function-scroll-area {
   flex: 1 1 0;
   min-height: 0;
-  overflow-y: auto;
   overscroll-behavior: contain;
 }
 
