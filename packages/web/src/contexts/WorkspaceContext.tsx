@@ -20,6 +20,7 @@ export type WorkspaceContextValue = CollectionSidebarProps &
   WorkspaceHeaderProps & {
     variableCollections: VariableCollectionRow[];
     variables: VariableRow[];
+    consumerTopicOrder: string[];
     selectedVariableCollectionId: string;
     variableCollectionDraft: VariableCollectionDraft;
     setVariableCollectionDraft: Dispatch<SetStateAction<VariableCollectionDraft>>;

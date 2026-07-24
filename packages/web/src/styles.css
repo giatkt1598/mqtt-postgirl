@@ -300,10 +300,6 @@ label {
   gap: 0.65rem;
 }
 
-.session-list {
-  gap: 0rem;
-}
-
 .collection-item,
 .request-item,
 .mini-row,
@@ -731,6 +727,10 @@ h1 {
   grid-template-columns: minmax(0, 1fr);
 }
 
+.editor-grid.full-width-page.consumers-page {
+  height: auto;
+}
+
 .request-tab-strip {
   display: flex;
   gap: 0.35rem;
@@ -794,18 +794,65 @@ h1 {
 
 .consumer-card {
   display: grid;
+  grid-template-rows: auto auto minmax(0, 1fr);
   gap: 1rem;
+  height: 100%;
+  min-height: 0;
   padding: 1rem;
+  overflow: visible;
+  overflow-anchor: none;
 }
 
 .consumer-layout {
   display: grid;
   grid-template-columns: minmax(280px, 0.75fr) minmax(0, 1.25fr);
   gap: 1rem;
+  min-height: 0;
+}
+
+.consumer-start-section > .section-head,
+.consumer-sessions-section > .section-head {
+  margin-bottom: 8px;
+}
+
+.consumer-qos-field,
+.consumer-qos-field .qos-select,
+.consumer-qos-field .qos-select select {
+  width: 100%;
+}
+
+.consumer-qos-field {
+  margin-top: 1rem;
 }
 
 .live-consumer-messages {
-  min-height: 260px;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  max-height: 100%;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.consumer-sessions-section {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: visible;
+}
+
+.consumer-sessions-section .session-list {
+  flex: 1 1 auto;
+  min-height: 0;
+  align-content: start;
+  overflow: visible;
+}
+
+.live-consumer-messages .message-list {
+  flex: 1 1 auto;
+  min-height: 0;
+  align-content: start;
+  overflow: hidden;
 }
 
 .function-guide p {
@@ -1949,6 +1996,7 @@ pre {
 
 .consumer-session-topic {
   border-left-width: 4px;
+  min-height: 4.5rem;
 }
 
 .log-row.publish {

@@ -11,6 +11,7 @@ export interface SavedTopic {
   key: string;
   topic: string;
   brokerProfileId: string;
+  qos: number;
 }
 
 export interface ConsumersPageProps {
@@ -20,8 +21,12 @@ export interface ConsumersPageProps {
   consumerQos: number;
   allTopics: string[];
   inactiveConsumerTopics: SavedTopic[];
+  consumerTopicOrder: string[];
   activeTopicKeys: Set<string>;
   liveMessages: ConsumerMessageEvent[];
+  visibleLiveMessageCount: number;
+  clearLiveMessages: () => void;
+  loadMoreLiveMessages: () => void;
   startConsumer: () => void;
   setConsumerTopics: (value: string) => void;
   setConsumerTopicColor: (value: string) => void;
@@ -46,8 +51,12 @@ export function ConsumersPage(): ReactNode {
     consumerQos,
     allTopics,
     inactiveConsumerTopics,
+    consumerTopicOrder,
     activeTopicKeys,
     liveMessages,
+    visibleLiveMessageCount,
+    clearLiveMessages,
+    loadMoreLiveMessages,
     startConsumer,
     setConsumerTopics,
     setConsumerTopicColor,
@@ -59,8 +68,31 @@ export function ConsumersPage(): ReactNode {
     askDeleteConfirmation,
     onBackToPublishers,
   } = useWorkspaceContext();
+  const activeTopics = consumerSessions.flatMap((session) =>
+    (JSON.parse(session.topicsJson) as string[]).map((topic) => ({
+      key: `${session.brokerProfileId}:${topic}`,
+      topic,
+      brokerProfileId: session.brokerProfileId,
+      sessionId: session.id,
+      qos: session.qos,
+    })),
+  );
+  const inactiveTopics = inactiveConsumerTopics
+    .filter((item) => !activeTopicKeys.has(item.key))
+    .map((item) => ({
+      ...item,
+      sessionId: null,
+      qos: Number.isInteger(item.qos) ? item.qos : 0,
+    }));
+  const topicsByKey = new Map(
+    [...activeTopics, ...inactiveTopics].map((item) => [item.key, item]),
+  );
+  const orderedTopicKeys = [
+    ...consumerTopicOrder.filter((key) => topicsByKey.has(key)),
+    ...topicsByKey.keys(),
+  ].filter((key, index, keys) => keys.indexOf(key) === index);
   return (
-    <section className="editor-grid full-width-page">
+    <section className="editor-grid full-width-page consumers-page">
       <div className="card consumer-card">
         <div className="card-head">
           <div>
@@ -73,7 +105,7 @@ export function ConsumersPage(): ReactNode {
           <button onClick={onBackToPublishers}>Back to publishers</button>
         </div>
         <div className="consumer-layout">
-          <div className="card-section">
+          <div className="card-section consumer-start-section">
             <div className="section-head">
               <span>Start consumer</span>
               <button onClick={startConsumer} className="primary">
@@ -102,7 +134,7 @@ export function ConsumersPage(): ReactNode {
                 }}
               />
             </div>
-            <label>
+            <label className="consumer-qos-field">
               QoS
               <QosSelect
                 value={consumerQos}
@@ -110,34 +142,36 @@ export function ConsumersPage(): ReactNode {
               />
             </label>
           </div>
-          <div className="card-section">
+          <div className="card-section consumer-sessions-section">
             <div className="section-head">
               <span>Active sessions</span>
             </div>
             <div className="session-list">
-              {consumerSessions.flatMap((session) =>
-                (JSON.parse(session.topicsJson) as string[]).map((topic) => (
+              {orderedTopicKeys.map((key) => {
+                const item = topicsByKey.get(key);
+                if (!item) return null;
+                return item.sessionId !== null ? (
                   <div
-                    key={`${session.id}:${topic}`}
+                    key={item.key}
                     className="session-row consumer-session-topic"
-                    style={{ borderLeftColor: getTopicColor(topic) }}
+                    style={{ borderLeftColor: getTopicColor(item.topic) }}
                   >
-                    <strong>{topic}</strong>
-                    <button onClick={() => unsubscribeTopic(session.id, topic)}>
+                    <strong>
+                      {item.topic} <small>(QoS: {item.qos})</small>
+                    </strong>
+                    <button onClick={() => unsubscribeTopic(item.sessionId, item.topic)}>
                       Unsubscribe
                     </button>
                   </div>
-                )),
-              )}
-              {inactiveConsumerTopics
-                .filter((item) => !activeTopicKeys.has(item.key))
-                .map((item) => (
+                ) : (
                   <div
-                    key={`inactive:${item.key}`}
+                    key={item.key}
                     className="session-row consumer-session-topic inactive-session"
                     style={{ borderLeftColor: getTopicColor(item.topic) }}
                   >
-                    <strong>{item.topic}</strong>
+                    <strong>
+                      {item.topic} <small>(QoS: {item.qos})</small>
+                    </strong>
                     <div className="button-row">
                       <button className="flex-1" onClick={() => subscribeSavedTopic(item)}>
                         Subscribe
@@ -156,16 +190,27 @@ export function ConsumersPage(): ReactNode {
                       </button>
                     </div>
                   </div>
-                ))}
+                );
+              })}
             </div>
           </div>
         </div>
         <div className="card-section live-consumer-messages">
           <div className="section-head">
-            <span>Live messages</span>
+            <span>
+              Live messages ({liveMessages.length >= 999 ? "999+" : liveMessages.length} messages)
+            </span>
+            <button
+              type="button"
+              className="danger"
+              onClick={clearLiveMessages}
+              disabled={!liveMessages.length}
+            >
+              Clear
+            </button>
           </div>
           <div className="message-list">
-            {liveMessages.map((message) => (
+            {liveMessages.slice(0, visibleLiveMessageCount).map((message) => (
               <div
                 key={message.log.id}
                 className="message-row"
@@ -173,12 +218,22 @@ export function ConsumersPage(): ReactNode {
               >
                 <strong>{message.topic}</strong>
                 <small>
-                  {typeof message.payloadJson === "object"
+                  {message.payloadJson !== null &&
+                  typeof message.payloadJson === "object"
                     ? toPrettyJson(message.payloadJson)
                     : message.payloadText}
                 </small>
               </div>
             ))}
+            {visibleLiveMessageCount < liveMessages.length && (
+              <button
+                type="button"
+                className="load-more-live-messages"
+                onClick={loadMoreLiveMessages}
+              >
+                Load more
+              </button>
+            )}
           </div>
         </div>
       </div>

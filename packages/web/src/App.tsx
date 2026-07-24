@@ -58,6 +58,7 @@ type InactiveConsumerTopic = {
   key: string;
   topic: string;
   brokerProfileId: string;
+  qos: number;
 };
 type DeleteConfirmation = {
   title: string;
@@ -80,6 +81,30 @@ const builtinFunctionPreviewTokens = [
 function inlinePreview(result: { text: string; json: unknown }) {
   if (result.json === null) return result.text;
   return JSON.stringify(result.json) ?? result.text;
+}
+
+function mergeConsumerSession(
+  state: BootstrapState | null,
+  session: ConsumerSessionRow,
+) {
+  if (!state) return state;
+  const current = state.consumerSessions.find((item) => item.id === session.id);
+  if (
+    current &&
+    current.topicsJson === session.topicsJson &&
+    current.active === session.active &&
+    current.qos === session.qos &&
+    current.brokerProfileId === session.brokerProfileId
+  ) {
+    return state;
+  }
+  return {
+    ...state,
+    consumerSessions: [
+      session,
+      ...state.consumerSessions.filter((item) => item.id !== session.id),
+    ],
+  };
 }
 
 export default function App() {
@@ -161,6 +186,15 @@ export default function App() {
       return [];
     }
   });
+  const [consumerTopicOrder, setConsumerTopicOrder] = useState<string[]>(() => {
+    try {
+      return JSON.parse(
+        localStorage.getItem("mqtt-postwoman.consumerTopicOrder") ?? "[]",
+      ) as string[];
+    } catch {
+      return [];
+    }
+  });
   const [topicColors, setTopicColors] = useState<Record<string, string>>(() => {
     try {
       return JSON.parse(
@@ -209,11 +243,15 @@ export default function App() {
     Record<string, string>
   >({});
   const [liveMessages, setLiveMessages] = useState<ConsumerMessageEvent[]>([]);
+  const [visibleLiveMessageCount, setVisibleLiveMessageCount] = useState(25);
   const [unreadConsumerMessages, setUnreadConsumerMessages] = useState(0);
   const [historyLogs, setHistoryLogs] = useState<MessageLogRow[]>([]);
   const [watchConsumerLogs, setWatchConsumerLogs] = useState(true);
   const watchConsumerLogsRef = useRef(true);
   const consumerLogResumeAfterRef = useRef<number | null>(null);
+  const pendingRealtimeLogsRef = useRef<MessageLogRow[]>([]);
+  const pendingConsumerMessagesRef = useRef<ConsumerMessageEvent[]>([]);
+  const realtimeFlushTimerRef = useRef<number | null>(null);
   const [error, setError] = useState<string>("");
   const [deleteConfirmation, setDeleteConfirmation] =
     useState<DeleteConfirmation | null>(null);
@@ -232,6 +270,41 @@ export default function App() {
       return Number.isNaN(createdAt) || createdAt > resumeAfter;
     });
     return mergeLogs(current, visibleIncoming);
+  };
+
+  const flushRealtimeUpdates = () => {
+    realtimeFlushTimerRef.current = null;
+
+    const logs = pendingRealtimeLogsRef.current.splice(0);
+    if (logs.length) {
+      setHistoryLogs((current) => mergeWatchedLogs(current, logs));
+    }
+
+    const messages = pendingConsumerMessagesRef.current.splice(0);
+    if (!messages.length) return;
+
+    setLiveMessages((current) => {
+      const next = [...messages.reverse(), ...current];
+      const seenLogIds = new Set<string>();
+      return next
+        .filter((item) => {
+          if (seenLogIds.has(item.log.id)) return false;
+          seenLogIds.add(item.log.id);
+          return true;
+        })
+        .slice(0, 999);
+    });
+    if (mainTabRef.current !== "consumers") {
+      setUnreadConsumerMessages((current) => current + messages.length);
+    }
+  };
+
+  const scheduleRealtimeFlush = () => {
+    if (realtimeFlushTimerRef.current !== null) return;
+    realtimeFlushTimerRef.current = window.setTimeout(
+      flushRealtimeUpdates,
+      100,
+    );
   };
 
   const closeActionPopover = () => {
@@ -321,65 +394,17 @@ export default function App() {
           setHistoryLogs((current) => mergeWatchedLogs(current, message.payload.logs));
         }
         if (message.type === "log.created") {
-          setHistoryLogs((current) => mergeWatchedLogs(current, [message.payload]));
-          if (
-            message.payload.direction === "consume" &&
-            message.payload.consumerSessionId
-          ) {
-            const liveMessage: ConsumerMessageEvent = {
-              consumerSessionId: message.payload.consumerSessionId,
-              topic: message.payload.topic,
-              payloadText: message.payload.payloadText,
-              payloadJson: message.payload.payloadJson
-                ? JSON.parse(message.payload.payloadJson)
-                : null,
-              log: message.payload,
-            };
-            setLiveMessages((current) =>
-              [
-                liveMessage,
-                ...current.filter((item) => item.log.id !== liveMessage.log.id),
-              ].slice(0, 25),
-            );
-          }
-          setBootstrap((current) =>
-            current
-              ? {
-                  ...current,
-                  logs: [
-                    message.payload,
-                    ...current.logs.filter(
-                      (item) => item.id !== message.payload.id,
-                    ),
-                  ],
-                }
-              : current,
-          );
+          pendingRealtimeLogsRef.current.push(message.payload);
+          scheduleRealtimeFlush();
         }
         if (message.type === "consumer.updated") {
           const current = message.payload;
           if (!current) return;
-          setBootstrap((state) =>
-            state
-              ? {
-                  ...state,
-                  consumerSessions: [
-                    current,
-                    ...state.consumerSessions.filter(
-                      (session) => session.id !== current.id,
-                    ),
-                  ],
-                }
-              : state,
-          );
+          setBootstrap((state) => mergeConsumerSession(state, current));
         }
         if (message.type === "consumer.message") {
-          setLiveMessages((current) =>
-            [message.payload, ...current].slice(0, 25),
-          );
-          if (mainTabRef.current !== "consumers") {
-            setUnreadConsumerMessages((current) => current + 1);
-          }
+          pendingConsumerMessagesRef.current.push(message.payload);
+          scheduleRealtimeFlush();
         }
         if (message.type === "broker.status") {
           const status = message.payload as {
@@ -429,6 +454,9 @@ export default function App() {
     }, 0);
     return () => {
       window.clearTimeout(timer);
+      if (realtimeFlushTimerRef.current !== null) {
+        window.clearTimeout(realtimeFlushTimerRef.current);
+      }
       ws?.close();
     };
   }, []);
@@ -1269,6 +1297,55 @@ export default function App() {
     setBootstrap((current) => (current ? { ...current, logs: [] } : current));
   };
 
+  const addConsumerTopicsToOrder = (brokerProfileId: string, topics: string[]) => {
+    setConsumerTopicOrder((current) => {
+      const next = [...current];
+      for (const topic of topics) {
+        const key = `${brokerProfileId}:${topic}`;
+        if (!next.includes(key)) next.push(key);
+      }
+      localStorage.setItem(
+        "mqtt-postwoman.consumerTopicOrder",
+        JSON.stringify(next),
+      );
+      return next;
+    });
+  };
+
+  const preserveConsumerTopicOrder = () => {
+    const activeKeys = consumerSessions.flatMap((session) =>
+      (JSON.parse(session.topicsJson) as string[]).map(
+        (topic) => `${session.brokerProfileId}:${topic}`,
+      ),
+    );
+    const knownKeys = [...activeKeys, ...inactiveConsumerTopics.map((item) => item.key)];
+    setConsumerTopicOrder((current) => {
+      const next = [
+        ...current.filter((key) => knownKeys.includes(key)),
+        ...knownKeys.filter((key) => !current.includes(key)),
+      ].filter((key, index, keys) => keys.indexOf(key) === index);
+      localStorage.setItem(
+        "mqtt-postwoman.consumerTopicOrder",
+        JSON.stringify(next),
+      );
+      return next;
+    });
+  };
+
+  const updateConsumerSession = (session: ConsumerSessionRow) => {
+    setBootstrap((current) => mergeConsumerSession(current, session));
+  };
+
+  const clearLiveMessages = () => {
+    pendingConsumerMessagesRef.current = [];
+    setLiveMessages([]);
+    setVisibleLiveMessageCount(25);
+  };
+
+  const loadMoreLiveMessages = () => {
+    setVisibleLiveMessageCount((current) => current + 25);
+  };
+
   const startConsumer = async () => {
     const topics = joinTopics(consumerTopics);
     const targetBroker = activeConnectionId;
@@ -1287,12 +1364,14 @@ export default function App() {
       return;
     }
     try {
-      await client.consumers.create({
+      const session = await client.consumers.create({
         name: "consumer",
         brokerProfileId: targetBroker,
         topics,
         qos: consumerQos,
       });
+      updateConsumerSession(session);
+      addConsumerTopicsToOrder(targetBroker, topics);
       setTopicColors((current) => {
         const next = { ...current };
         for (const topic of topics) next[topic] = consumerTopicColor;
@@ -1302,7 +1381,6 @@ export default function App() {
         );
         return next;
       });
-      await refresh();
       setConsumerTopics("");
       const nextColor = randomTopicColor();
       setConsumerTopicColor(nextColor);
@@ -1330,12 +1408,15 @@ export default function App() {
     try {
       const session = consumerSessions.find((item) => item.id === sessionId);
       if (!session) return;
-      await client.consumers.unsubscribe(sessionId, topic);
+      preserveConsumerTopicOrder();
+      const updatedSession = await client.consumers.unsubscribe(sessionId, topic);
+      if (updatedSession) updateConsumerSession(updatedSession);
       setInactiveConsumerTopics((current) => {
         const item = {
           key: `${session.brokerProfileId}:${topic}`,
           topic,
           brokerProfileId: session.brokerProfileId,
+          qos: session.qos,
         };
         const next = [
           ...current.filter((entry) => entry.key !== item.key),
@@ -1347,7 +1428,6 @@ export default function App() {
         );
         return next;
       });
-      await refresh();
     } catch (error) {
       toast.error(
         error instanceof Error ? error.message : "Unable to unsubscribe",
@@ -1368,12 +1448,14 @@ export default function App() {
         toast.error("Connect to a broker before subscribing.");
         return;
       }
-      await client.consumers.create({
+      const session = await client.consumers.create({
         name: "consumer",
         brokerProfileId: targetBroker,
         topics: [item.topic],
-        qos: consumerQos,
+        qos: item.qos,
       });
+      updateConsumerSession(session);
+      addConsumerTopicsToOrder(targetBroker, [item.topic]);
       setTopicColors((current) => {
         const next = { ...current, [item.topic]: getTopicColor(item.topic) };
         localStorage.setItem(
@@ -1390,7 +1472,6 @@ export default function App() {
         );
         return next;
       });
-      await refresh();
     } catch (error) {
       toast.error(
         error instanceof Error ? error.message : "Unable to subscribe",
@@ -1403,6 +1484,14 @@ export default function App() {
       const next = current.filter((item) => item.key !== key);
       localStorage.setItem(
         "mqtt-postwoman.inactiveConsumerTopics",
+        JSON.stringify(next),
+      );
+      return next;
+    });
+    setConsumerTopicOrder((current) => {
+      const next = current.filter((item) => item !== key);
+      localStorage.setItem(
+        "mqtt-postwoman.consumerTopicOrder",
         JSON.stringify(next),
       );
       return next;
@@ -1748,8 +1837,12 @@ export default function App() {
     consumerQos,
     allTopics,
     inactiveConsumerTopics,
+    consumerTopicOrder,
     activeTopicKeys,
     liveMessages,
+    visibleLiveMessageCount,
+    clearLiveMessages,
+    loadMoreLiveMessages,
     startConsumer,
     setConsumerTopics,
     setConsumerTopicColor,
