@@ -1131,6 +1131,19 @@ h1 {
   line-height: 1.25;
 }
 
+.connection-name-row {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  min-width: 0;
+}
+
+.connection-name-row .connection-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .connection-endpoint,
 .connection-auth {
   color: var(--muted);
@@ -1288,6 +1301,11 @@ h1 {
   width: fit-content;
   max-width: 100%;
   min-width: 0;
+}
+
+.request-detail-method {
+  cursor: default;
+  font-size: 1rem;
 }
 
 .request-name-input {

@@ -143,7 +143,10 @@ export function ConnectionsPage(): ReactNode {
                     className={`connection-row ${isActive ? "active" : ""}`}
                   >
                     <div className="connection-details">
-                      <strong className="connection-name">{broker.name}</strong>
+                      <div className="connection-name-row">
+                        <span className="request-method">MQTT</span>
+                        <strong className="connection-name">{broker.name}</strong>
+                      </div>
                       <small className="connection-endpoint">
                         {brokerEndpoint(broker)}
                       </small>

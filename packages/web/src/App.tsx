@@ -1667,6 +1667,7 @@ export default function App() {
               <div className="request-toolbar">
                 <div>
                   <div className="request-name-line">
+                    <span className="request-method request-detail-method">MQTT</span>
                     <input
                       className="request-name-input"
                       aria-label="Request name"
