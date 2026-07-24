@@ -1189,6 +1189,11 @@ h1 {
   font-weight: 600;
 }
 
+.variable-token {
+  color: #f783c5 !important;
+  font-weight: 600;
+}
+
 .inspector-card > .tab-row {
   flex: 0 0 auto;
 }
@@ -1351,6 +1356,11 @@ h1 {
     transform 160ms ease;
 }
 
+.topic-input-shell {
+  position: relative;
+}
+
+.topic-value-highlight,
 .topic-autocomplete input {
   width: 100%;
   margin: 0;
@@ -1360,6 +1370,24 @@ h1 {
   background: transparent;
   color: #79c9ff;
   font-size: 1rem;
+}
+
+.topic-value-highlight {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+  white-space: pre;
+}
+
+.topic-value-highlight .variable-token {
+  font-weight: inherit;
+}
+
+.topic-autocomplete input.has-variable-tokens {
+  position: relative;
+  color: transparent;
+  caret-color: #79c9ff;
 }
 
 .topic-autocomplete:focus-within .topic-floating-label,

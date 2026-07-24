@@ -6,15 +6,34 @@ import { safeJsonParse } from "./utils";
 export type { ResolvedTemplate, TemplateContext } from "./template/types";
 
 function resolveHelper(name: string, context: TemplateContext) {
-  if (name.startsWith("var.")) return context.variableCollection[name.slice(4)] ?? context.variables[name.slice(4)] ?? "";
   const builtin = resolveBuiltinFunction(name, context);
   if (builtin.matched) return builtin.value;
   const custom = resolveCustomHelper(name, context);
   return custom.matched ? custom.value : `{{${name}}}`;
 }
 
+function resolveVariableToken(token: string, context: TemplateContext) {
+  const names = [...new Set([
+    ...Object.keys(context.variableCollection),
+    ...Object.keys(context.variables),
+  ])]
+    .filter((name) => /^[A-Za-z0-9_]+$/.test(name) && token.startsWith(name))
+    .sort((left, right) => right.length - left.length);
+  const name = names[0];
+  if (!name) return `$${token}`;
+
+  const resolved = context.variableCollection[name] ?? context.variables[name] ?? "";
+  const text = typeof resolved === "object" ? JSON.stringify(resolved) : String(resolved);
+  return `${text}${token.slice(name.length)}`;
+}
+
 function replaceInString(value: string, context: TemplateContext) {
-  return value.replace(/{{\s*([^}]+?)\s*}}/g, (_match: string, token: string) => {
+  const withVariables = value.replace(
+    /\$([A-Za-z0-9_]+)/g,
+    (_match: string, token: string) => resolveVariableToken(token, context),
+  );
+
+  return withVariables.replace(/{{\s*([^}]+?)\s*}}/g, (_match: string, token: string) => {
     const resolved = resolveHelper(token, context);
     if (resolved === undefined || resolved === null) return "";
     return typeof resolved === "object" ? JSON.stringify(resolved) : String(resolved);

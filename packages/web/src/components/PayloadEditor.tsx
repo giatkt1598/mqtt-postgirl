@@ -5,7 +5,8 @@ import CssWorker from "monaco-editor/language/css/css.worker.js?worker";
 import HtmlWorker from "monaco-editor/language/html/html.worker.js?worker";
 import JsonWorker from "monaco-editor/language/json/json.worker.js?worker";
 import TypeScriptWorker from "monaco-editor/language/typescript/ts.worker.js?worker";
-import { useRef } from "react";
+import { useEffect, useRef } from "react";
+import { findVariableTokens, variableNamePattern } from "../utils/variableTokens";
 
 type MonacoWorkerEnvironment = {
   getWorker: (_workerId: string, label: string) => Worker;
@@ -47,6 +48,7 @@ export interface PayloadEditorVariable {
 }
 
 export interface PayloadEditorProps {
+  requestId: string;
   value: string;
   language: PayloadEditorLanguage;
   variables: PayloadEditorVariable[];
@@ -94,18 +96,37 @@ function getCompletionRegistry(): TemplateCompletionRegistry {
   return registry;
 }
 
-function templateRange(
+type CompletionContext =
+  | { kind: "builtin"; token: string; range: monaco.Range }
+  | { kind: "variable"; token: string; range: monaco.Range };
+
+function completionContext(
   model: monaco.editor.ITextModel,
   position: monaco.Position,
-) {
+): CompletionContext | null {
   const lineBeforeCursor = model
     .getLineContent(position.lineNumber)
     .slice(0, position.column - 1);
+  const variableMatch = /\$([A-Za-z0-9_]*)$/.exec(lineBeforeCursor);
+  if (variableMatch && variableMatch.index !== undefined) {
+    return {
+      kind: "variable",
+      token: variableMatch[1] ?? "",
+      range: new monaco.Range(
+        position.lineNumber,
+        variableMatch.index + 1,
+        position.lineNumber,
+        position.column,
+      ),
+    };
+  }
+
   const openingIndex = lineBeforeCursor.lastIndexOf("{{");
   if (openingIndex < 0) return null;
   const token = lineBeforeCursor.slice(openingIndex + 2);
   if (!/^[A-Za-z0-9_.:-]*$/.test(token)) return null;
   return {
+    kind: "builtin",
     token,
     range: new monaco.Range(
       position.lineNumber,
@@ -117,15 +138,56 @@ function templateRange(
 }
 
 export function PayloadEditor({
+  requestId,
   value,
   language,
   variables,
   onChange,
 }: PayloadEditorProps) {
   const variablesRef = useRef(variables);
+  const editorRef = useRef<monaco.editor.IStandaloneCodeEditor | null>(null);
+  const latestEditorValueRef = useRef(value);
+  const pendingLocalEditRef = useRef(false);
+  const previousRequestIdRef = useRef(requestId);
+  const updateDecorationsRef = useRef<() => void>(() => undefined);
   variablesRef.current = variables;
 
+  useEffect(() => {
+    updateDecorationsRef.current();
+  }, [variables]);
+
+  useEffect(() => {
+    const editor = editorRef.current;
+    if (!editor) return;
+
+    if (previousRequestIdRef.current !== requestId) {
+      previousRequestIdRef.current = requestId;
+      latestEditorValueRef.current = value;
+      pendingLocalEditRef.current = false;
+      if (editor.getValue() !== value) editor.setValue(value);
+      return;
+    }
+
+    if (value === latestEditorValueRef.current) {
+      pendingLocalEditRef.current = false;
+      return;
+    }
+
+    if (pendingLocalEditRef.current) return;
+
+    latestEditorValueRef.current = value;
+    editor.setValue(value);
+  }, [requestId, value]);
+
+  const handleChange = (nextValue: string | undefined) => {
+    const nextPayload = nextValue ?? "";
+    latestEditorValueRef.current = nextPayload;
+    pendingLocalEditRef.current = true;
+    onChange(nextPayload);
+  };
+
   const handleMount: OnMount = (editor, monacoInstance) => {
+    editorRef.current = editor;
     const completionRegistry = getCompletionRegistry();
     completionRegistry.provider?.dispose();
     monacoInstance.editor.defineTheme("mqtt-postgirl-dark", {
@@ -150,18 +212,18 @@ export function PayloadEditor({
     const provider = monacoInstance.languages.registerCompletionItemProvider(
       ["json", "xml", "plaintext"],
       {
-        triggerCharacters: ["{", ".", ":"],
+        triggerCharacters: ["{", "$"],
         provideCompletionItems(
           model: monaco.editor.ITextModel,
           position: monaco.Position,
         ) {
-          const context = templateRange(model, position);
+          const context = completionContext(model, position);
           if (!context) return { suggestions: [] };
           const { token, range } = context;
           const lineAfterCursor = model
             .getLineContent(position.lineNumber)
             .slice(position.column - 1);
-          const completionRange = lineAfterCursor.startsWith("}}")
+          const completionRange = context.kind === "builtin" && lineAfterCursor.startsWith("}}")
             ? new monacoInstance.Range(
                 range.startLineNumber,
                 range.startColumn,
@@ -171,15 +233,8 @@ export function PayloadEditor({
             : range;
           const suggestions: monaco.languages.CompletionItem[] = [];
 
-          const normalizedToken = token.toLowerCase();
-          const variablePrefix =
-            normalizedToken === "var"
-              ? ""
-              : normalizedToken.startsWith("var.")
-                ? token.slice("var.".length).toLowerCase()
-                : null;
-
-          if (variablePrefix === null) {
+          if (context.kind === "builtin") {
+            const normalizedToken = token.toLowerCase();
             for (const suggestion of builtinSuggestions) {
               if (suggestion.label.toLowerCase().includes(normalizedToken)) {
                 suggestions.push({
@@ -196,29 +251,46 @@ export function PayloadEditor({
             }
           }
 
-          if (variablePrefix !== null) {
+          if (context.kind === "variable") {
+            const variablePrefix = token.toLowerCase();
             for (const variable of variablesRef.current) {
+              if (!variableNamePattern.test(variable.name)) continue;
               if (!variable.name.toLowerCase().startsWith(variablePrefix)) continue;
               suggestions.push({
-                label: `var.${variable.name}`,
-                filterText: `{{var.${variable.name}}}`,
+                label: `$${variable.name}`,
+                filterText: `$${variable.name}`,
                 kind: monacoInstance.languages.CompletionItemKind.Variable,
                 detail: variable.value || "Empty value",
-                insertText: `{{var.${variable.name}}}`,
-                insertTextRules:
-                  monacoInstance.languages.CompletionItemInsertTextRule.InsertAsSnippet,
+                insertText: `$${variable.name}`,
                 range: completionRange,
               });
             }
           }
 
-          return { suggestions };
+          // Re-query this provider as the template token changes instead of
+          // filtering the initial built-in list from the {{ trigger.
+          return { suggestions, incomplete: true };
         },
       },
     );
     completionRegistry.provider = provider;
     monacoInstance.editor.setTheme("mqtt-postgirl-dark");
     let decorationIds: string[] = [];
+    const triggerTemplateSuggestions = () => {
+      const model = editor.getModel();
+      const position = editor.getPosition();
+      if (!model || !position) return;
+      const lineBeforeCursor = model
+        .getLineContent(position.lineNumber)
+        .slice(0, position.column - 1);
+      const shouldTriggerSuggestions =
+        lineBeforeCursor.endsWith("{{") ||
+        /\$[A-Za-z0-9_]*$/.test(lineBeforeCursor) ||
+        lineBeforeCursor.endsWith("$");
+      if (shouldTriggerSuggestions) {
+        editor.trigger("mqtt-postgirl", "editor.action.triggerSuggest", {});
+      }
+    };
     const updateTemplateDecorations = () => {
       const model = editor.getModel();
       if (!model) return;
@@ -234,30 +306,37 @@ export function PayloadEditor({
           options: { inlineClassName: "template-token" },
         });
       }
-      decorationIds = editor.deltaDecorations(decorationIds, decorations);
-
-      const position = editor.getPosition();
-      if (!position) return;
-      const lineBeforeCursor = model
-        .getLineContent(position.lineNumber)
-        .slice(0, position.column - 1);
-      const shouldTriggerSuggestions =
-        lineBeforeCursor.endsWith("{{") ||
-        lineBeforeCursor.endsWith("{{var") ||
-        lineBeforeCursor.endsWith("{{var.");
-      if (shouldTriggerSuggestions) {
-        editor.trigger("mqtt-postgirl", "editor.action.triggerSuggest", {});
+      for (const token of findVariableTokens(model.getValue(), variablesRef.current)) {
+        decorations.push({
+          range: monacoInstance.Range.fromPositions(
+            model.getPositionAt(token.start),
+            model.getPositionAt(token.end),
+          ),
+          options: { inlineClassName: "variable-token" },
+        });
       }
+      decorationIds = editor.deltaDecorations(decorationIds, decorations);
     };
+    updateDecorationsRef.current = updateTemplateDecorations;
     updateTemplateDecorations();
     const contentDisposable = editor.onDidChangeModelContent(
       updateTemplateDecorations,
     );
+    const cursorDisposable = editor.onDidChangeCursorPosition(
+      triggerTemplateSuggestions,
+    );
     return () => {
       contentDisposable.dispose();
+      cursorDisposable.dispose();
       provider.dispose();
       if (completionRegistry.provider === provider) {
         completionRegistry.provider = null;
+      }
+      if (editorRef.current === editor) {
+        editorRef.current = null;
+      }
+      if (updateDecorationsRef.current === updateTemplateDecorations) {
+        updateDecorationsRef.current = () => undefined;
       }
       editor.deltaDecorations(decorationIds, []);
     };
@@ -269,8 +348,8 @@ export function PayloadEditor({
         height="100%"
         language={language}
         theme="mqtt-postgirl-dark"
-        value={value}
-        onChange={(nextValue) => onChange(nextValue ?? "")}
+        defaultValue={value}
+        onChange={handleChange}
         onMount={handleMount}
         options={{
           automaticLayout: true,
@@ -282,8 +361,8 @@ export function PayloadEditor({
           minimap: { enabled: false },
           padding: { top: 12, bottom: 12 },
           scrollBeyondLastLine: false,
-          quickSuggestions: { comments: false, other: true, strings: true },
-          suggestOnTriggerCharacters: true,
+          quickSuggestions: false,
+          suggestOnTriggerCharacters: false,
           tabSize: 2,
           wordWrap: "on",
         }}

@@ -1706,6 +1706,7 @@ export default function App() {
                     label="Topic"
                     value={draft.topic}
                     topics={allTopics}
+                    variables={payloadEditorVariables}
                     onChange={(topic) => {
                       setTopicValidationError(false);
                       setDraft({ ...draft, topic });
@@ -1742,11 +1743,12 @@ export default function App() {
               </div>
 
               <PayloadEditor
+                requestId={draft.id ?? ""}
                 value={draft.payloadTemplate}
                 language={payloadEditorLanguage}
                 variables={payloadEditorVariables}
                 onChange={(payloadTemplate) =>
-                  setDraft({ ...draft, payloadTemplate })
+                  setDraft((current) => ({ ...current, payloadTemplate }))
                 }
               />
 

@@ -26,6 +26,7 @@ test("supports variable collection and variable CRUD", async () => {
     const variable = await repositories.saveVariable({ variableCollectionId: collection.id, name: "API_URL", value: "http://localhost" });
     assert.equal(variable.value, "http://localhost");
     await assert.rejects(() => repositories.saveVariable({ variableCollectionId: collection.id, name: "API_URL", value: "duplicate" }), /already exists/);
+    await assert.rejects(() => repositories.saveVariable({ variableCollectionId: collection.id, name: "API-URL", value: "invalid" }), /letters, numbers, and underscores/);
     assert.equal((await repositories.listVariables(collection.id)).length, 1);
     await repositories.deleteVariable(variable.id);
     await repositories.deleteVariableCollection(collection.id);

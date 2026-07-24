@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import { toast } from "react-toastify";
 import { useWorkspaceContext, type VariableDraftRow } from "../contexts";
 import type { VariableCollectionRow, VariableRow } from "../models";
+import { variableNamePattern } from "../utils/variableTokens";
 
 const emptyVariableRow = (): VariableDraftRow => ({ name: "", value: "" });
 
@@ -86,7 +87,12 @@ export function VariablesPage(): ReactNode {
 
   const updateRow = (index: number, field: "name" | "value", value: string) => {
     const rows = selectedRows.map((row, rowIndex) =>
-      rowIndex === index ? { ...row, [field]: value } : row,
+      rowIndex === index
+        ? {
+            ...row,
+            [field]: field === "name" ? value.replace(/[^A-Za-z0-9_]/g, "") : value,
+          }
+        : row,
     );
     updateRows(rows);
   };
@@ -120,6 +126,10 @@ export function VariablesPage(): ReactNode {
     const rows = selectedRows.filter((row) => row.name.trim() || row.value);
     if (rows.some((row) => !row.name.trim())) {
       setSaveError("Variable name is required when a value is entered.");
+      return;
+    }
+    if (rows.some((row) => !variableNamePattern.test(row.name.trim()))) {
+      setSaveError("Variable name may only contain letters, numbers, and underscores.");
       return;
     }
     const names = rows.map((row) => row.name.trim());
@@ -211,7 +221,7 @@ export function VariablesPage(): ReactNode {
               />
               {isModified && <span className="modified-label">(Modified)</span>}
             </div>
-            <small>Variables used with {"{{var.NAME}}"}</small>
+            <small>Variables used with $NAME</small>
           </div>
           <div className="button-row">
             <button
