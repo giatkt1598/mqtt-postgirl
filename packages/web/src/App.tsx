@@ -465,8 +465,8 @@ export default function App() {
     ? variables
         .filter(
           (variable) =>
-            variable.variableCollectionId ===
-            selectedCollection.variableCollectionId,
+            String(variable.variableCollectionId) ===
+            String(selectedCollection.variableCollectionId),
         )
         .map((variable) => ({ name: variable.name, value: variable.value }))
     : [];

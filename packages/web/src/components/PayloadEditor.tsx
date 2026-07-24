@@ -76,6 +76,24 @@ const builtinSuggestions = [
   },
 ] as const;
 
+type TemplateCompletionRegistry = {
+  provider: monaco.IDisposable | null;
+};
+
+const completionRegistryKey = "__mqttPostgirlTemplateCompletionRegistry";
+
+function getCompletionRegistry(): TemplateCompletionRegistry {
+  const existing = Reflect.get(
+    globalThis,
+    completionRegistryKey,
+  ) as TemplateCompletionRegistry | undefined;
+  if (existing) return existing;
+
+  const registry: TemplateCompletionRegistry = { provider: null };
+  Reflect.set(globalThis, completionRegistryKey, registry);
+  return registry;
+}
+
 function templateRange(
   model: monaco.editor.ITextModel,
   position: monaco.Position,
@@ -108,6 +126,8 @@ export function PayloadEditor({
   variablesRef.current = variables;
 
   const handleMount: OnMount = (editor, monacoInstance) => {
+    const completionRegistry = getCompletionRegistry();
+    completionRegistry.provider?.dispose();
     monacoInstance.editor.defineTheme("mqtt-postgirl-dark", {
       base: "vs-dark",
       inherit: true,
@@ -151,9 +171,17 @@ export function PayloadEditor({
             : range;
           const suggestions: monaco.languages.CompletionItem[] = [];
 
-          if (!token.startsWith("var.")) {
+          const normalizedToken = token.toLowerCase();
+          const variablePrefix =
+            normalizedToken === "var"
+              ? ""
+              : normalizedToken.startsWith("var.")
+                ? token.slice("var.".length).toLowerCase()
+                : null;
+
+          if (variablePrefix === null) {
             for (const suggestion of builtinSuggestions) {
-              if (suggestion.label.toLowerCase().includes(token.toLowerCase())) {
+              if (suggestion.label.toLowerCase().includes(normalizedToken)) {
                 suggestions.push({
                   label: suggestion.label,
                   filterText: suggestion.label,
@@ -168,15 +196,12 @@ export function PayloadEditor({
             }
           }
 
-          const variablePrefix = token.startsWith("var.")
-            ? token.slice("var.".length).toLowerCase()
-            : null;
           if (variablePrefix !== null) {
             for (const variable of variablesRef.current) {
               if (!variable.name.toLowerCase().startsWith(variablePrefix)) continue;
               suggestions.push({
                 label: `var.${variable.name}`,
-                filterText: `var.${variable.name}`,
+                filterText: `{{var.${variable.name}}}`,
                 kind: monacoInstance.languages.CompletionItemKind.Variable,
                 detail: variable.value || "Empty value",
                 insertText: `{{var.${variable.name}}}`,
@@ -191,6 +216,7 @@ export function PayloadEditor({
         },
       },
     );
+    completionRegistry.provider = provider;
     monacoInstance.editor.setTheme("mqtt-postgirl-dark");
     let decorationIds: string[] = [];
     const updateTemplateDecorations = () => {
@@ -215,7 +241,11 @@ export function PayloadEditor({
       const lineBeforeCursor = model
         .getLineContent(position.lineNumber)
         .slice(0, position.column - 1);
-      if (/\{\{(?:var\.)?$/.test(lineBeforeCursor)) {
+      const shouldTriggerSuggestions =
+        lineBeforeCursor.endsWith("{{") ||
+        lineBeforeCursor.endsWith("{{var") ||
+        lineBeforeCursor.endsWith("{{var.");
+      if (shouldTriggerSuggestions) {
         editor.trigger("mqtt-postgirl", "editor.action.triggerSuggest", {});
       }
     };
@@ -226,6 +256,9 @@ export function PayloadEditor({
     return () => {
       contentDisposable.dispose();
       provider.dispose();
+      if (completionRegistry.provider === provider) {
+        completionRegistry.provider = null;
+      }
       editor.deltaDecorations(decorationIds, []);
     };
   };
