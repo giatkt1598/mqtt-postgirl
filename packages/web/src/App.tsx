@@ -501,6 +501,32 @@ export default function App() {
     }
   }, [draft]);
 
+  useEffect(() => {
+    const timers = new Map<HTMLElement, ReturnType<typeof setTimeout>>();
+    const scrollTargets = document.querySelectorAll<HTMLElement>(
+      ".sidebar-panel, .inspector-card .log-list, .inspector-card > .stack > .function-guide",
+    );
+    const handleScroll = (event: Event) => {
+      const target = event.currentTarget;
+      if (!(target instanceof HTMLElement)) return;
+      const timer = timers.get(target);
+      if (timer) clearTimeout(timer);
+      target.classList.add("is-scrolling");
+      timers.set(
+        target,
+        setTimeout(() => {
+          target.classList.remove("is-scrolling");
+          timers.delete(target);
+        }, 650),
+      );
+    };
+    scrollTargets.forEach((target) => target.addEventListener("scroll", handleScroll));
+    return () => {
+      scrollTargets.forEach((target) => target.removeEventListener("scroll", handleScroll));
+      timers.forEach((timer) => clearTimeout(timer));
+    };
+  }, [mainTab, rightTab]);
+
   const selectedCollection = collections.find(
     (collection) => collection.id === selectedCollectionId,
   );

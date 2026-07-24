@@ -207,6 +207,73 @@ label {
   flex: 1;
 }
 
+/* Keep workspace sidebars compact without styling the Monaco editor scrollbar. */
+.sidebar-panel,
+.inspector-card .log-list,
+.inspector-card > .stack > .function-guide {
+  scrollbar-width: thin;
+  scrollbar-color: transparent transparent;
+}
+
+.sidebar-panel::-webkit-scrollbar,
+.inspector-card .log-list::-webkit-scrollbar,
+.inspector-card > .stack > .function-guide::-webkit-scrollbar {
+  width: 6px;
+}
+
+.sidebar-panel::-webkit-scrollbar-button,
+.sidebar-panel::-webkit-scrollbar-button:vertical:decrement,
+.sidebar-panel::-webkit-scrollbar-button:vertical:increment,
+.inspector-card .log-list::-webkit-scrollbar-button,
+.inspector-card .log-list::-webkit-scrollbar-button:vertical:decrement,
+.inspector-card .log-list::-webkit-scrollbar-button:vertical:increment,
+.inspector-card > .stack > .function-guide::-webkit-scrollbar-button {
+  -webkit-appearance: none;
+  display: none;
+  height: 0;
+  width: 0;
+}
+
+.sidebar-panel::-webkit-scrollbar-track,
+.inspector-card .log-list::-webkit-scrollbar-track,
+.inspector-card > .stack > .function-guide::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.sidebar-panel::-webkit-scrollbar-thumb,
+.inspector-card .log-list::-webkit-scrollbar-thumb,
+.inspector-card > .stack > .function-guide::-webkit-scrollbar-thumb {
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  background-clip: padding-box;
+  transition: background-color 180ms ease-out;
+}
+
+.sidebar-panel.is-scrolling,
+.sidebar-panel:hover,
+.inspector-card .log-list.is-scrolling,
+.inspector-card .log-list:hover,
+.inspector-card > .stack > .function-guide.is-scrolling,
+.inspector-card > .stack > .function-guide:hover {
+  scrollbar-color: rgba(148, 163, 184, 0.7) transparent;
+}
+
+.sidebar-panel.is-scrolling::-webkit-scrollbar-thumb,
+.sidebar-panel:hover::-webkit-scrollbar-thumb,
+.inspector-card .log-list.is-scrolling::-webkit-scrollbar-thumb,
+.inspector-card .log-list:hover::-webkit-scrollbar-thumb,
+.inspector-card > .stack > .function-guide.is-scrolling::-webkit-scrollbar-thumb,
+.inspector-card > .stack > .function-guide:hover::-webkit-scrollbar-thumb {
+  background-color: rgba(148, 163, 184, 0.7);
+  animation: sidebar-scrollbar-fade-in 180ms ease-out;
+}
+
+@keyframes sidebar-scrollbar-fade-in {
+  from { background-color: transparent; }
+  to { background-color: rgba(148, 163, 184, 0.7); }
+}
+
 .panel-header,
 .card-head,
 .section-head,
