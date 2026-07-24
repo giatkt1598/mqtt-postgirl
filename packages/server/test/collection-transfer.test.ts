@@ -31,7 +31,7 @@ test("exports and imports a collection as request JSON files", async () => {
     await repositories.saveVariable({ variableCollectionId: variableCollection.id, name: "API_URL", value: "http://localhost" });
     await repositories.saveVariable({ variableCollectionId: variableCollection.id, name: "TOKEN", value: "secret" });
     await repositories.saveCollection({ id: collection.id, name: collection.name, description: collection.description, variableCollectionId: variableCollection.id });
-    await repositories.saveRequest({ collectionId: collection.id, name: "Create order", topic: "orders/create", payloadTemplate: '{"id":1}', qos: 1, retain: true, sortOrder: 0 });
+    await repositories.saveRequest({ collectionId: collection.id, name: "Create order", topic: "orders/create", payloadTemplate: '<id>1</id>', payloadFormat: "xml", qos: 1, retain: true, sortOrder: 0 });
     const exported = await service.exportCollection(collection.id);
     const directory = await unzipper.Open.buffer(exported.buffer);
     const names = directory.files.map((entry) => entry.path).sort();
@@ -40,7 +40,7 @@ test("exports and imports a collection as request JSON files", async () => {
     assert.equal(imported.collection.name, "Orders (Imported)");
     assert.equal(imported.collection.variableCollectionId, variableCollection.id);
     assert.deepEqual((await repositories.listVariables(variableCollection.id)).map((variable) => variable.name), ["API_URL", "TOKEN"]);
-    assert.deepEqual(imported.requests.map((request) => ({ name: request.name, topic: request.topic, retain: request.retain })), [{ name: "Create order", topic: "orders/create", retain: 1 }]);
+    assert.deepEqual(imported.requests.map((request) => ({ name: request.name, topic: request.topic, payloadTemplate: request.payloadTemplate, payloadFormat: request.payloadFormat, retain: request.retain })), [{ name: "Create order", topic: "orders/create", payloadTemplate: "<id>1</id>", payloadFormat: "xml", retain: 1 }]);
     const createdWithVariables = await repositories.importCollection({ name: "With variables", variableCollection: { name: "remote", variables: [{ name: "HOST", value: "broker" }] }, requests: [] });
     assert.ok(createdWithVariables.collection.variableCollectionId);
     assert.equal((await repositories.listVariables(createdWithVariables.collection.variableCollectionId ?? ""))[0]?.value, "broker");

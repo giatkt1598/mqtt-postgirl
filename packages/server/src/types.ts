@@ -18,6 +18,7 @@ export interface RequestRow {
   name: string;
   topic: string;
   payloadTemplate: string;
+  payloadFormat: string;
   qos: number;
   retain: number;
   brokerProfileId: Id | null;

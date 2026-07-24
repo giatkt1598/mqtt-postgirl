@@ -28,6 +28,8 @@ import {
   requestToDraft,
   toPrettyJson,
   topicMatches,
+  jsonToXml,
+  xmlToJson,
 } from "./utilities";
 import {
   BootstrapState,
@@ -40,6 +42,7 @@ import {
   MessageLogRow,
   RequestRow,
   CustomFunctionRow,
+  PayloadFormat,
 } from "./models";
 import { useWorkspaceNavigation } from "./hooks";
 import {
@@ -50,7 +53,6 @@ import {
 
 type RightTab = "history" | "functions";
 type CollectionModal = "create" | "edit" | "import" | null;
-type PayloadFormat = "raw" | "xml" | "json";
 type InactiveConsumerTopic = {
   key: string;
   topic: string;
@@ -140,7 +142,6 @@ export default function App() {
   const [requestDrafts, setRequestDrafts] = useState<
     Record<string, DraftRequest>
   >({});
-  const [payloadFormat, setPayloadFormat] = useState<PayloadFormat>("json");
   const [batchCount, setBatchCount] = useState(1);
   const [batchDelayMs, setBatchDelayMs] = useState(0);
   const [consumerTopics, setConsumerTopics] = useState("device/+/status");
@@ -499,7 +500,26 @@ export default function App() {
     (collection) => collection.id === selectedCollectionId,
   );
   const payloadEditorLanguage =
-    payloadFormat === "raw" ? "plaintext" : payloadFormat;
+    draft.payloadFormat === "raw" ? "plaintext" : draft.payloadFormat;
+
+  const changePayloadFormat = (format: PayloadFormat) => {
+    setDraft((current) => {
+      if (current.payloadFormat === format) return current;
+      try {
+        const payloadTemplate = format === "xml" && current.payloadFormat !== "xml"
+          ? jsonToXml(current.payloadTemplate)
+          : format === "json" && current.payloadFormat !== "json"
+            ? xmlToJson(current.payloadTemplate)
+            : current.payloadTemplate;
+        return { ...current, payloadFormat: format, payloadTemplate };
+      } catch (error) {
+        toast.error(
+          `Cannot convert ${current.payloadFormat.toUpperCase()} to ${format.toUpperCase()}: ${error instanceof Error ? error.message : "invalid payload"}`,
+        );
+        return current;
+      }
+    });
+  };
   const payloadEditorVariables = selectedCollection?.variableCollectionId
     ? variables
         .filter(
@@ -1158,6 +1178,7 @@ export default function App() {
         name: `${request.name} Copy`,
         topic: request.topic,
         payloadTemplate: request.payloadTemplate,
+        payloadFormat: request.payloadFormat,
         qos: request.qos,
         retain: Boolean(request.retain),
         brokerProfileId: request.brokerProfileId,
@@ -1862,9 +1883,10 @@ export default function App() {
                 <div className="payload-format-tabs">
                   {(["raw", "xml", "json"] as PayloadFormat[]).map((format) => (
                     <button
+                      type="button"
                       key={format}
-                      className={payloadFormat === format ? "active" : ""}
-                      onClick={() => setPayloadFormat(format)}
+                      className={draft.payloadFormat === format ? "active" : ""}
+                      onClick={() => changePayloadFormat(format)}
                     >
                       {format}
                     </button>
@@ -1889,12 +1911,12 @@ export default function App() {
               />
 
               <div className="request-controls">
-                {payloadFormat !== "raw" && (
+                {draft.payloadFormat !== "raw" && (
                   <button
                     type="button"
                     className="beautify-link"
                     onClick={() => {
-                      if (payloadFormat === "json") {
+                      if (draft.payloadFormat === "json") {
                         try {
                           setDraft({
                             ...draft,

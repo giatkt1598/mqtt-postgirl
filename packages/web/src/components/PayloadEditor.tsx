@@ -180,6 +180,7 @@ export function PayloadEditor({
   const latestEditorValueRef = useRef(value);
   const pendingLocalEditRef = useRef(false);
   const previousRequestIdRef = useRef(requestId);
+  const previousLanguageRef = useRef(language);
   const updateDecorationsRef = useRef<() => void>(() => undefined);
   variablesRef.current = variables;
   customFunctionsRef.current = customFunctions;
@@ -194,6 +195,17 @@ export function PayloadEditor({
 
     if (previousRequestIdRef.current !== requestId) {
       previousRequestIdRef.current = requestId;
+      previousLanguageRef.current = language;
+      latestEditorValueRef.current = value;
+      pendingLocalEditRef.current = false;
+      if (editor.getValue() !== value) editor.setValue(value);
+      return;
+    }
+
+    // A format conversion changes both the content and language. Apply it even
+    // while a local typing update is pending so Monaco cannot retain stale text.
+    if (previousLanguageRef.current !== language) {
+      previousLanguageRef.current = language;
       latestEditorValueRef.current = value;
       pendingLocalEditRef.current = false;
       if (editor.getValue() !== value) editor.setValue(value);
@@ -209,7 +221,7 @@ export function PayloadEditor({
 
     latestEditorValueRef.current = value;
     editor.setValue(value);
-  }, [requestId, value]);
+  }, [language, requestId, value]);
 
   const handleChange = (nextValue: string | undefined) => {
     const nextPayload = nextValue ?? "";

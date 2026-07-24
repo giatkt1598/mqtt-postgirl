@@ -14,6 +14,7 @@ export interface RequestRow {
   name: string;
   topic: string;
   payloadTemplate: string;
+  payloadFormat: PayloadFormat;
   qos: number;
   retain: boolean;
   brokerProfileId: string | null;
@@ -21,6 +22,8 @@ export interface RequestRow {
   createdAt: string;
   updatedAt: string;
 }
+
+export type PayloadFormat = "raw" | "xml" | "json";
 
 export interface VariableCollectionRow {
   id: string;
@@ -120,6 +123,7 @@ export interface DraftRequest {
   name: string;
   topic: string;
   payloadTemplate: string;
+  payloadFormat: PayloadFormat;
   qos: number;
   retain: boolean;
   brokerProfileId: string;

@@ -22,7 +22,7 @@ export const RequestEntity = new EntitySchema<RequestRow>({
   tableName: "requests",
   columns: {
     ...baseColumns,
-    collectionId: { type: String }, name: { type: String }, topic: { type: String }, payloadTemplate: { type: String },
+    collectionId: { type: String }, name: { type: String }, topic: { type: String }, payloadTemplate: { type: String }, payloadFormat: { type: String, default: "json" },
     qos: { type: Number, default: 0 }, retain: { type: Number, default: 0 }, brokerProfileId: { type: String, nullable: true }, sortOrder: { type: Number, default: 0 },
   },
 });

@@ -28,6 +28,7 @@ type RequestWrite = {
   name: string;
   topic: string;
   payloadTemplate: string;
+  payloadFormat: "raw" | "xml" | "json";
   qos: number;
   retain: boolean;
   brokerProfileId?: string | null | undefined;

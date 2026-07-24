@@ -10,6 +10,7 @@ export interface ImportedRequest {
   name: string;
   topic: string;
   payloadTemplate: string;
+  payloadFormat: "raw" | "xml" | "json";
   qos: number;
   retain: boolean;
 }
@@ -93,10 +94,15 @@ function parseRequest(value: unknown, fileName: string): ImportedRequest {
   if (value.retain !== undefined && typeof value.retain !== "boolean") {
     throw new Error(`${fileName}: retain must be a boolean.`);
   }
+  const payloadFormat = value.payloadFormat === undefined ? "json" : value.payloadFormat;
+  if (payloadFormat !== "raw" && payloadFormat !== "xml" && payloadFormat !== "json") {
+    throw new Error(`${fileName}: payloadFormat must be raw, xml, or json.`);
+  }
   return {
     name: requiredString(value.name, "name", fileName).trim(),
     topic: typeof value.topic === "string" ? value.topic : "",
     payloadTemplate: typeof value.payloadTemplate === "string" ? value.payloadTemplate : "{}",
+    payloadFormat,
     qos,
     retain: value.retain ?? false,
   };
@@ -177,6 +183,7 @@ export class CollectionTransferService {
       name: request.name,
       topic: request.topic,
       payloadTemplate: request.payloadTemplate,
+      payloadFormat: request.payloadFormat,
       qos: request.qos,
       retain: Boolean(request.retain),
     };
