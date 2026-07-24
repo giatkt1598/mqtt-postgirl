@@ -1571,6 +1571,34 @@ h1 {
   padding: 0.35rem 0.5rem;
 }
 
+.qos-select {
+  position: relative;
+  display: inline-block;
+  min-width: 3.25rem;
+}
+
+.qos-select select {
+  position: relative;
+  z-index: 1;
+  width: 3.25rem;
+  min-width: 0;
+  color: transparent;
+  text-shadow: none;
+}
+
+.qos-select select option {
+  color: var(--text);
+}
+
+.qos-select-value {
+  position: absolute;
+  z-index: 2;
+  top: 50%;
+  left: 0.5rem;
+  pointer-events: none;
+  transform: translateY(-50%);
+}
+
 .retain-control input {
   width: auto;
   margin: 0;
@@ -1685,6 +1713,19 @@ pre {
 .inline input[type="checkbox"] {
   width: auto;
   margin: 0;
+}
+
+.log-watch-control {
+  align-self: end;
+  color: var(--muted);
+  font-size: 0.78rem;
+  white-space: nowrap;
+}
+
+.logs-heading {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
 }
 
 .switch-control input[type="checkbox"] {

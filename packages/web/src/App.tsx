@@ -6,6 +6,7 @@ import { apiClient as client, createRealtimeSocket } from "./apis";
 import {
   CollectionSidebar,
   PayloadEditor,
+  QosSelect,
   TopicAutocomplete,
   WorkspaceHeader,
 } from "./components";
@@ -183,10 +184,23 @@ export default function App() {
   const [liveMessages, setLiveMessages] = useState<ConsumerMessageEvent[]>([]);
   const [unreadConsumerMessages, setUnreadConsumerMessages] = useState(0);
   const [historyLogs, setHistoryLogs] = useState<MessageLogRow[]>([]);
+  const [watchConsumerLogs, setWatchConsumerLogs] = useState(true);
+  const watchConsumerLogsRef = useRef(true);
   const [error, setError] = useState<string>("");
   const [deleteConfirmation, setDeleteConfirmation] =
     useState<DeleteConfirmation | null>(null);
   const [topicValidationError, setTopicValidationError] = useState(false);
+
+  const mergeWatchedLogs = (
+    current: MessageLogRow[],
+    incoming: MessageLogRow[],
+  ) =>
+    mergeLogs(
+      current,
+      watchConsumerLogsRef.current
+        ? incoming
+        : incoming.filter((log) => log.direction !== "consume"),
+    );
 
   const closeActionPopover = () => {
     setCollectionMenuId(null);
@@ -211,7 +225,7 @@ export default function App() {
     ]);
     setBootstrap(data);
     setBrokerStatuses(statuses);
-    setHistoryLogs((current) => mergeLogs(current, fetchedLogs));
+    setHistoryLogs((current) => mergeWatchedLogs(current, fetchedLogs));
     if (!selectedCollectionId && data.collections[0]) {
       setSelectedCollectionId(data.collections[0].id);
     }
@@ -240,7 +254,7 @@ export default function App() {
     void client.logs
       .list()
       .then((fetchedLogs) =>
-        setHistoryLogs((current) => mergeLogs(current, fetchedLogs)),
+        setHistoryLogs((current) => mergeWatchedLogs(current, fetchedLogs)),
       )
       .catch((err) =>
         setError(err instanceof Error ? err.message : "Unable to load history"),
@@ -272,10 +286,10 @@ export default function App() {
           | { type: "broker.status"; payload: unknown };
         if (message.type === "bootstrap") {
           setBootstrap(message.payload);
-          setHistoryLogs((current) => mergeLogs(current, message.payload.logs));
+          setHistoryLogs((current) => mergeWatchedLogs(current, message.payload.logs));
         }
         if (message.type === "log.created") {
-          setHistoryLogs((current) => mergeLogs(current, [message.payload]));
+          setHistoryLogs((current) => mergeWatchedLogs(current, [message.payload]));
           if (
             message.payload.direction === "consume" &&
             message.payload.consumerSessionId
@@ -1115,7 +1129,7 @@ export default function App() {
       .filter((item) => item.ok && item.log)
       .map((item) => item.log);
     if (publishedLogs.length) {
-      setHistoryLogs((current) => mergeLogs(current, publishedLogs));
+      setHistoryLogs((current) => mergeWatchedLogs(current, publishedLogs));
       setBootstrap((current) =>
         current
           ? { ...current, logs: mergeLogs(current.logs, publishedLogs) }
@@ -1123,7 +1137,7 @@ export default function App() {
       );
     }
     const fetchedLogs = await client.logs.list();
-    setHistoryLogs((current) => mergeLogs(current, fetchedLogs));
+    setHistoryLogs((current) => mergeWatchedLogs(current, fetchedLogs));
     setBootstrap((current) =>
       current ? { ...current, logs: mergeLogs(current.logs, fetchedLogs) } : current,
     );
@@ -1818,16 +1832,10 @@ export default function App() {
                 </label>
                 <label>
                   QoS
-                  <select
+                  <QosSelect
                     value={draft.qos}
-                    onChange={(event) =>
-                      setDraft({ ...draft, qos: Number(event.target.value) })
-                    }
-                  >
-                    <option value={0}>0</option>
-                    <option value={1}>1</option>
-                    <option value={2}>2</option>
-                  </select>
+                    onChange={(qos) => setDraft({ ...draft, qos })}
+                  />
                 </label>
                 <label className="retain-control">
                   <input
@@ -1894,16 +1902,10 @@ export default function App() {
                     </label>
                     <label>
                       QoS
-                      <select
+                      <QosSelect
                         value={consumerQos}
-                        onChange={(event) =>
-                          setConsumerQos(Number(event.target.value))
-                        }
-                      >
-                        <option value={0}>0</option>
-                        <option value={1}>1</option>
-                        <option value={2}>2</option>
-                      </select>
+                        onChange={setConsumerQos}
+                      />
                     </label>
                   </div>
 
@@ -1989,12 +1991,33 @@ export default function App() {
                 <div className="stack">
                   <div className="card-section">
                     <div className="section-head">
-                      <div className="section-title-stack">
-                        <span>Publish and consume log</span>
-                        <small>
-                          (publish: {publishLogCount}, consume:{" "}
-                          {consumeLogCount})
-                        </small>
+                      <div className="logs-heading">
+                        <div className="section-title-stack">
+                          <span>Logs</span>
+                          <small>
+                            (publish: {publishLogCount}, consume:{" "}
+                            {consumeLogCount})
+                          </small>
+                        </div>
+                        <label className="inline log-watch-control">
+                          <input
+                            type="checkbox"
+                            checked={watchConsumerLogs}
+                            onChange={(event) => {
+                              const enabled = event.target.checked;
+                              watchConsumerLogsRef.current = enabled;
+                              setWatchConsumerLogs(enabled);
+                              if (!enabled) {
+                                setHistoryLogs((current) =>
+                                  current.filter(
+                                    (log) => log.direction !== "consume",
+                                  ),
+                                );
+                              }
+                            }}
+                          />
+                          Watch consumer
+                        </label>
                       </div>
                       <button
                         onClick={clearHistory}

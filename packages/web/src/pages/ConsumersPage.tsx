@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { TopicAutocomplete } from "../components";
+import { QosSelect, TopicAutocomplete } from "../components";
 import type {
   ConsumerMessageEvent,
   ConsumerSessionRow,
@@ -104,14 +104,10 @@ export function ConsumersPage(): ReactNode {
             </div>
             <label>
               QoS
-              <select
+              <QosSelect
                 value={consumerQos}
-                onChange={(event) => setConsumerQos(Number(event.target.value))}
-              >
-                <option value={0}>0</option>
-                <option value={1}>1</option>
-                <option value={2}>2</option>
-              </select>
+                onChange={setConsumerQos}
+              />
             </label>
           </div>
           <div className="card-section">
