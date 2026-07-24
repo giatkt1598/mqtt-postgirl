@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { AppRepositories } from "../repositories";
 import { RuntimeService } from "../runtime";
-import { createTemplateHelperMap, resolveTemplatePayload } from "../template";
+import { createCustomFunctionMap, resolveTemplatePayload } from "../template";
 import { parseObjectLike } from "../utils";
 
 export type CollectionInput = { id?: string | undefined; name: string; description?: string | null | undefined; variableCollectionId?: string | null | undefined };
@@ -20,13 +20,13 @@ export class AppServices {
   requests = { list: (collectionId?: string) => this.repos.listRequests(collectionId), get: (id: string) => this.repos.getRequest(id), save: (input: RequestInput) => this.repos.saveRequest(input), delete: (id: string) => this.repos.deleteRequest(id), reorder: (collectionId: string, ids: string[]) => this.repos.reorderRequests(collectionId, ids) };
   variables = { collections: () => this.repos.listVariableCollections(), collection: (id: string) => this.repos.getVariableCollection(id), saveCollection: (input: VariableCollectionInput) => this.repos.saveVariableCollection(input), deleteCollection: (id: string) => this.repos.deleteVariableCollection(id), list: (id?: string) => this.repos.listVariables(id), get: (id: string) => this.repos.getVariable(id), save: (input: VariableInput) => this.repos.saveVariable(input), delete: (id: string) => this.repos.deleteVariable(id), reorder: (id: string, ids: string[]) => this.repos.reorderVariables(id, ids) };
   brokers = { list: () => this.repos.listBrokers(), get: (id: string) => this.repos.getBroker(id), save: (input: BrokerInput) => this.repos.saveBroker(input), delete: (id: string) => this.repos.deleteBroker(id) };
-  helpers = { list: () => this.repos.listHelpers(), save: (input: { id?: string | undefined; name: string; kind: string; configJson: string }) => this.repos.saveHelper(input), delete: (id: string) => this.repos.deleteHelper(id) };
+  customFunctions = { list: () => this.repos.listCustomFunctions(), save: (input: { id?: string | undefined; name: string; description?: string | null | undefined; value: string }) => this.repos.saveCustomFunction(input), delete: (id: string) => this.repos.deleteCustomFunction(id) };
   logs = { list: (limit?: number) => this.repos.listLogs(limit), clear: () => this.repos.clearLogs() };
 
   async resolve(template: string, variableCollectionId: string | null | undefined, variables: Record<string, unknown>, sequenceOffset = 0) {
     const values = variableCollectionId ? Object.fromEntries((await this.repos.listVariables(variableCollectionId)).map((item) => [item.name, item.value])) : {};
-    const helpers = createTemplateHelperMap(await this.repos.listHelpers());
-    return resolveTemplatePayload(template, { variableCollection: values, variables: parseObjectLike(variables), helpers, sequenceOffset });
+    const customFunctions = createCustomFunctionMap(await this.repos.listCustomFunctions());
+    return resolveTemplatePayload(template, { variableCollection: values, variables: parseObjectLike(variables), customFunctions, sequenceOffset });
   }
 
   async publish(input: PublishInput) {

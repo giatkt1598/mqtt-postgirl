@@ -1,15 +1,13 @@
-import { createTemplateHelperMap, resolveCustomHelper } from "./template/custom-helpers";
+import { createCustomFunctionMap, resolveCustomFunction } from "./template/custom-functions";
 import { resolveBuiltinFunction } from "./template/functions";
 import { ResolvedTemplate, TemplateContext } from "./template/types";
 import { safeJsonParse } from "./utils";
 
 export type { ResolvedTemplate, TemplateContext } from "./template/types";
 
-function resolveHelper(name: string, context: TemplateContext) {
-  const builtin = resolveBuiltinFunction(name, context);
-  if (builtin.matched) return builtin.value;
-  const custom = resolveCustomHelper(name, context);
-  return custom.matched ? custom.value : `{{${name}}}`;
+function valueToText(value: unknown) {
+  if (value === undefined || value === null) return "";
+  return typeof value === "object" ? JSON.stringify(value) : String(value);
 }
 
 function resolveVariableToken(token: string, context: TemplateContext) {
@@ -23,20 +21,27 @@ function resolveVariableToken(token: string, context: TemplateContext) {
   if (!name) return `$${token}`;
 
   const resolved = context.variableCollection[name] ?? context.variables[name] ?? "";
-  const text = typeof resolved === "object" ? JSON.stringify(resolved) : String(resolved);
-  return `${text}${token.slice(name.length)}`;
+  return `${valueToText(resolved)}${token.slice(name.length)}`;
 }
 
-function replaceInString(value: string, context: TemplateContext) {
+function replaceInString(
+  value: string,
+  context: TemplateContext,
+  stack: string[] = [],
+  depth = 0,
+) {
   const withVariables = value.replace(
     /\$([A-Za-z0-9_]+)/g,
     (_match: string, token: string) => resolveVariableToken(token, context),
   );
 
-  return withVariables.replace(/{{\s*([^}]+?)\s*}}/g, (_match: string, token: string) => {
-    const resolved = resolveHelper(token, context);
-    if (resolved === undefined || resolved === null) return "";
-    return typeof resolved === "object" ? JSON.stringify(resolved) : String(resolved);
+  return withVariables.replace(/\{\{\s*([^}]+?)\s*}}/g, (match: string, token: string) => {
+    const builtin = resolveBuiltinFunction(token, context);
+    if (builtin.matched) return valueToText(builtin.value);
+
+    const custom = resolveCustomFunction(token, context);
+    if (!custom.matched || depth >= 32 || stack.includes(token)) return match;
+    return replaceInString(valueToText(custom.value), context, [...stack, token], depth + 1);
   });
 }
 
@@ -55,7 +60,7 @@ export function resolveTemplatePayload(template: string, context?: Partial<Templ
   const fullContext: TemplateContext = {
     variableCollection: context?.variableCollection ?? {},
     variables: context?.variables ?? {},
-    helpers: context?.helpers ?? {},
+    customFunctions: context?.customFunctions ?? {},
     sequenceOffset: context?.sequenceOffset ?? 0,
   };
   const parsed = safeJsonParse(template);
@@ -67,4 +72,4 @@ export function resolveTemplatePayload(template: string, context?: Partial<Templ
   return { text: JSON.stringify(resolved, null, 2), json: resolved, value: resolved };
 }
 
-export { createTemplateHelperMap };
+export { createCustomFunctionMap };

@@ -13,7 +13,7 @@ const route = asyncHandler;
 type Request = ExpressRequest<{ id: string }>;
 const orderSchema = z.object({ collectionIds: z.array(z.string()).optional(), requestIds: z.array(z.string()).optional(), variableIds: z.array(z.string()).optional() });
 const consumerSchema = z.object({ name: z.string().min(1), brokerProfileId: z.string().min(1), topics: z.array(z.string().min(1)).min(1), qos: z.number().int().min(0).max(2).default(0) });
-const helperSchema = z.object({ id: z.string().optional(), name: z.string().min(1), kind: z.enum(["literal", "now", "uuid", "randomInt", "env"]), configJson: z.string().default("{}") });
+const customFunctionSchema = z.object({ id: z.string().optional(), name: z.string().trim().regex(/^[A-Za-z0-9_]+$/, "Custom function name may only contain letters, numbers, and underscores."), description: z.string().trim().optional().nullable(), value: z.string() });
 const templateSchema = z.object({ template: z.string(), variableCollectionId: z.string().nullable().optional(), variables: z.record(z.string(), z.unknown()).default({}) });
 const publishSchema = z.object({ requestId: z.string().optional(), brokerProfileId: z.string().optional(), topic: z.string().optional(), payloadTemplate: z.string().optional(), qos: z.number().int().min(0).max(2).default(0), retain: z.boolean().default(false), variableCollectionId: z.string().nullable().optional(), variables: z.record(z.string(), z.unknown()).default({}) });
 const batchSchema = publishSchema.extend({ count: z.number().int().min(1).max(1000000).default(10), delayMs: z.number().int().min(0).max(60000).default(0), items: z.array(z.object({ topic: z.string().optional(), payloadTemplate: z.string().optional(), variables: z.record(z.string(), z.unknown()).optional() })).optional() });
@@ -72,10 +72,10 @@ export function buildMvcRouter(dataSource: DataSource, runtime: RuntimeService) 
   router.post("/brokers/test", route(async (req: Request, res: Response) => res.json(await runtime.testBrokerConfig(schemas.broker.omit({ id: true, name: true }).parse(req.body)) )));
   router.post("/brokers/:id/disconnect", route(async (req: Request, res: Response) => { await runtime.disconnectBroker(req.params.id); res.status(204).end(); }));
 
-  router.get("/helpers", route(async (_req: Request, res: Response) => res.json(await services.helpers.list())));
-  router.post("/helpers", route(async (req: Request, res: Response) => res.status(201).json(await services.helpers.save(helperSchema.parse(req.body)))));
-  router.put("/helpers/:id", route(async (req: Request, res: Response) => res.json(await services.helpers.save(helperSchema.parse({ ...req.body, id: req.params.id })) )));
-  router.delete("/helpers/:id", route(async (req: Request, res: Response) => { await services.helpers.delete(req.params.id); res.status(204).end(); }));
+  router.get("/custom-functions", route(async (_req: Request, res: Response) => res.json(await controllers.customFunctions.list())));
+  router.post("/custom-functions", route(async (req: Request, res: Response) => res.status(201).json(await controllers.customFunctions.save(customFunctionSchema.parse(req.body)))));
+  router.put("/custom-functions/:id", route(async (req: Request, res: Response) => res.json(await controllers.customFunctions.save(customFunctionSchema.parse({ ...req.body, id: req.params.id })) )));
+  router.delete("/custom-functions/:id", route(async (req: Request, res: Response) => { const deleted = await controllers.customFunctions.remove(req.params.id); if (!deleted) return res.status(404).json({ message: "Custom function not found" }); return res.status(204).end(); }));
 
   router.get("/consumer-sessions", route(async (_req: Request, res: Response) => res.json(await repositories.listSessions())));
   router.post("/consumer-sessions", route(async (req: Request, res: Response) => res.status(201).json(await runtime.startConsumer(consumerSchema.parse(req.body)))));

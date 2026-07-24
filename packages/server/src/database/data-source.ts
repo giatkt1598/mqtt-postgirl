@@ -5,6 +5,7 @@ import { DataSource } from "typeorm";
 import { entities } from "./entities";
 import { InitialSchema1760000000000 } from "./migrations/0001-initial-schema";
 import { MigrateLegacyEnvironment1760000000001 } from "./migrations/0002-migrate-legacy-environment";
+import { MigrateTemplateHelpers1760000000002 } from "./migrations/0003-migrate-template-helpers";
 
 export function databasePath() {
   return process.env.SQLITE_PATH ?? path.resolve(process.cwd(), "data", "mqtt-postwoman.db");
@@ -17,7 +18,7 @@ export function createDataSource() {
     type: "better-sqlite3",
     database: file,
     entities,
-    migrations: [InitialSchema1760000000000, MigrateLegacyEnvironment1760000000001],
+    migrations: [InitialSchema1760000000000, MigrateLegacyEnvironment1760000000001, MigrateTemplateHelpers1760000000002],
     synchronize: false,
     logging: false,
     prepareDatabase: (db) => {

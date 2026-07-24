@@ -1,7 +1,9 @@
 import { DataSource, EntityManager, EntitySchema, FindManyOptions, ObjectLiteral, Repository } from "typeorm";
 import { createId, nowIso } from "../utils";
-import { BrokerProfileEntity, CollectionEntity, ConsumerSessionEntity, MessageLogEntity, RequestEntity, TemplateHelperEntity, VariableCollectionEntity, VariableEntity } from "../database/entities";
-import { BrokerProfileRow, CollectionRow, ConsumerSessionRow, MessageLogRow, RequestRow, TemplateHelperRow, VariableCollectionRow, VariableRow } from "../types";
+import { BrokerProfileEntity, CollectionEntity, ConsumerSessionEntity, CustomFunctionEntity, MessageLogEntity, RequestEntity, VariableCollectionEntity, VariableEntity } from "../database/entities";
+import { BrokerProfileRow, CollectionRow, ConsumerSessionRow, CustomFunctionRow, MessageLogRow, RequestRow, VariableCollectionRow, VariableRow } from "../types";
+import { customFunctionNamePattern, extractCustomFunctionReferences } from "../template/custom-functions";
+import { listBuiltinFunctions } from "../template/functions";
 
 type Store = EntityManager | DataSource;
 
@@ -17,7 +19,7 @@ export class AppRepositories {
   variables() { return this.repository<VariableRow>(VariableEntity); }
   variableCollections() { return this.repository<VariableCollectionRow>(VariableCollectionEntity); }
   brokers() { return this.repository<BrokerProfileRow>(BrokerProfileEntity); }
-  helpers() { return this.repository<TemplateHelperRow>(TemplateHelperEntity); }
+  customFunctions() { return this.repository<CustomFunctionRow>(CustomFunctionEntity); }
   sessions() { return this.repository<ConsumerSessionRow>(ConsumerSessionEntity); }
   logs() { return this.repository<MessageLogRow>(MessageLogEntity); }
 
@@ -102,10 +104,59 @@ export class AppRepositories {
     return this.brokers().save(entity);
   }
   async deleteBroker(id: string) { await this.brokers().delete(id); }
-  async listHelpers() { return this.helpers().find({ order: { createdAt: "DESC" } }); }
-  async getHelper(id: string) { return this.helpers().findOneBy({ id }); }
-  async saveHelper(input: { id?: string | undefined; name: string; kind: string; configJson: string }) { const current = input.id ? await this.getHelper(input.id) : undefined; const timestamp = nowIso(); return this.helpers().save(this.helpers().create({ id: input.id ?? createId(), name: input.name, kind: input.kind as TemplateHelperRow["kind"], configJson: input.configJson, createdAt: current?.createdAt ?? timestamp, updatedAt: timestamp })); }
-  async deleteHelper(id: string) { await this.helpers().delete(id); }
+  async listCustomFunctions() { return this.customFunctions().find({ order: { createdAt: "DESC" } }); }
+  async getCustomFunction(id: string) { return this.customFunctions().findOneBy({ id }); }
+  async saveCustomFunction(input: { id?: string | undefined; name: string; description?: string | null | undefined; value: string }) {
+    const name = input.name.trim();
+    if (!customFunctionNamePattern.test(name)) throw new Error("Custom function name may only contain letters, numbers, and underscores.");
+    const builtInNames = new Set(listBuiltinFunctions().map((builtin) => builtin.name));
+    if (builtInNames.has(name)) throw new Error(`Custom function name "${name}" conflicts with a built-in function.`);
+    const duplicate = await this.customFunctions().findOneBy({ name });
+    if (duplicate && duplicate.id !== input.id) throw new Error(`Custom function "${name}" already exists.`);
+    const current = input.id ? await this.getCustomFunction(input.id) : undefined;
+    const timestamp = nowIso();
+    const candidate: CustomFunctionRow = {
+      id: input.id ?? createId(), name, description: input.description?.trim() || null, value: input.value,
+      createdAt: current?.createdAt ?? timestamp, updatedAt: timestamp,
+    };
+    const functions = [...(await this.listCustomFunctions()).filter((item) => item.id !== candidate.id), candidate];
+    const names = new Set(functions.map((item) => item.name));
+    const dependencies = new Map(functions.map((item) => [
+      item.name,
+      extractCustomFunctionReferences(item.value).filter(
+        (reference) => names.has(reference) && !builtInNames.has(reference),
+      ),
+    ]));
+    const visiting = new Set<string>();
+    const visited = new Set<string>();
+    const visit = (functionName: string): boolean => {
+      if (visiting.has(functionName)) return true;
+      if (visited.has(functionName)) return false;
+      visiting.add(functionName);
+      const hasLoop = (dependencies.get(functionName) ?? []).some(visit);
+      visiting.delete(functionName);
+      visited.add(functionName);
+      return hasLoop;
+    };
+    if (functions.some((item) => visit(item.name))) throw new Error("Custom function dependency loop detected.");
+    return this.customFunctions().save(this.customFunctions().create(candidate));
+  }
+  async deleteCustomFunction(id: string) {
+    const current = await this.getCustomFunction(id);
+    if (!current) return false;
+    const builtInNames = new Set(listBuiltinFunctions().map((builtin) => builtin.name));
+    const dependents = (await this.listCustomFunctions())
+      .filter(
+        (item) =>
+          item.id !== id &&
+          !builtInNames.has(current.name) &&
+          extractCustomFunctionReferences(item.value).includes(current.name),
+      )
+      .map((item) => item.name);
+    if (dependents.length) throw new Error(`Custom function "${current.name}" is referenced by: ${dependents.join(", ")}.`);
+    await this.customFunctions().delete(id);
+    return true;
+  }
   async listSessions() { return this.sessions().find({ order: { createdAt: "DESC" } }); }
   async getSession(id: string) { return this.sessions().findOneBy({ id }); }
   async saveSession(input: Partial<ConsumerSessionRow> & { name: string; brokerProfileId: string; topics: string[] }) { const current = input.id ? await this.getSession(input.id) : undefined; const timestamp = nowIso(); return this.sessions().save(this.sessions().create({ ...current, id: input.id ?? createId(), name: input.name, brokerProfileId: input.brokerProfileId, topicsJson: JSON.stringify(input.topics), qos: input.qos ?? current?.qos ?? 0, active: Number(input.active ?? current?.active ?? 1), createdAt: current?.createdAt ?? timestamp, updatedAt: timestamp })); }
@@ -113,5 +164,5 @@ export class AppRepositories {
   async listLogs(limit = 200) { return this.logs().find({ order: { createdAt: "DESC" }, take: limit }); }
   async clearLogs() { await this.logs().clear(); }
   async addLog(input: Omit<MessageLogRow, "id"> & { id?: string }) { return this.logs().save(this.logs().create({ ...input, id: input.id ?? createId() })); }
-  async bootstrap() { return { collections: await this.listCollections(), requests: await this.listRequests(), variableCollections: await this.listVariableCollections(), variables: await this.listVariables(), brokers: await this.listBrokers(), helpers: await this.listHelpers(), consumerSessions: await this.listSessions(), logs: await this.listLogs() }; }
+  async bootstrap() { return { collections: await this.listCollections(), requests: await this.listRequests(), variableCollections: await this.listVariableCollections(), variables: await this.listVariables(), brokers: await this.listBrokers(), customFunctions: await this.listCustomFunctions(), consumerSessions: await this.listSessions(), logs: await this.listLogs() }; }
 }

@@ -58,11 +58,11 @@ export class BrokerController {
   disconnect = (id: string) => this.runtime.disconnectBroker(id);
 }
 
-export class HelperController {
+export class CustomFunctionController {
   constructor(private readonly service: AppServices) {}
-  list = () => this.service.helpers.list();
-  save = (input: Parameters<AppServices["helpers"]["save"]>[0]) => this.service.helpers.save(input);
-  remove = (id: string) => this.service.helpers.delete(id);
+  list = () => this.service.customFunctions.list();
+  save = (input: Parameters<AppServices["customFunctions"]["save"]>[0]) => this.service.customFunctions.save(input);
+  remove = (id: string) => this.service.customFunctions.delete(id);
 }
 
 export class ConsumerController {
@@ -88,7 +88,7 @@ export function createControllers(service: AppServices, runtime: RuntimeService)
     variables: new VariableController(service),
     publish: new PublishController(service),
     brokers: new BrokerController(service, runtime),
-    helpers: new HelperController(service),
+    customFunctions: new CustomFunctionController(service),
     consumers: new ConsumerController(runtime, service),
     logs: new LogController(service),
   };

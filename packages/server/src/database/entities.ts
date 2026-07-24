@@ -1,5 +1,5 @@
 import { EntitySchema } from "typeorm";
-import { BrokerProfileRow, CollectionRow, ConsumerSessionRow, MessageLogRow, RequestRow, TemplateHelperRow, VariableCollectionRow, VariableRow } from "../types";
+import { BrokerProfileRow, CollectionRow, ConsumerSessionRow, CustomFunctionRow, MessageLogRow, RequestRow, VariableCollectionRow, VariableRow } from "../types";
 
 const baseColumns = {
   id: { type: String, primary: true },
@@ -47,9 +47,9 @@ export const BrokerProfileEntity = new EntitySchema<BrokerProfileRow>({
   },
 });
 
-export const TemplateHelperEntity = new EntitySchema<TemplateHelperRow>({
-  name: "TemplateHelper", tableName: "template_helpers",
-  columns: { ...baseColumns, name: { type: String }, kind: { type: String }, configJson: { type: String } },
+export const CustomFunctionEntity = new EntitySchema<CustomFunctionRow>({
+  name: "CustomFunction", tableName: "custom_functions",
+  columns: { ...baseColumns, name: { type: String }, description: { type: String, nullable: true }, value: { type: String } },
 });
 
 export const ConsumerSessionEntity = new EntitySchema<ConsumerSessionRow>({
@@ -64,4 +64,4 @@ export const MessageLogEntity = new EntitySchema<MessageLogRow>({
   },
 });
 
-export const entities = [CollectionEntity, RequestEntity, VariableCollectionEntity, VariableEntity, BrokerProfileEntity, TemplateHelperEntity, ConsumerSessionEntity, MessageLogEntity];
+export const entities = [CollectionEntity, RequestEntity, VariableCollectionEntity, VariableEntity, BrokerProfileEntity, CustomFunctionEntity, ConsumerSessionEntity, MessageLogEntity];

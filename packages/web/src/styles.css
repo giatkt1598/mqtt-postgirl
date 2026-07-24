@@ -783,6 +783,54 @@ h1 {
   font-size: 0.78rem;
 }
 
+.custom-functions-section {
+  margin-top: 1.25rem;
+  padding-top: 1.1rem;
+  border-top: 1px solid rgba(255, 255, 255, 0.09);
+}
+
+.custom-function-row {
+  position: relative;
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+
+.custom-function-content {
+  display: grid;
+  min-width: 0;
+  gap: 0.35rem;
+}
+
+.custom-function-actions {
+  display: flex;
+  align-items: start;
+  gap: 0.2rem;
+  opacity: 0;
+  transition: opacity 160ms ease;
+}
+
+.custom-function-row:hover .custom-function-actions,
+.custom-function-row:focus-within .custom-function-actions {
+  opacity: 1;
+}
+
+.custom-function-actions .icon-button {
+  background: transparent;
+}
+
+.custom-function-actions svg {
+  width: 0.95rem;
+  height: 0.95rem;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.8;
+}
+
+.custom-function-modal {
+  width: min(560px, calc(100vw - 2rem));
+}
+
 .connection-manager,
 .connections-form {
   padding: 1rem;

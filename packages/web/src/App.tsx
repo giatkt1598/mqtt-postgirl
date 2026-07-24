@@ -39,7 +39,7 @@ import {
   VariableCollectionRow,
   MessageLogRow,
   RequestRow,
-  TemplateHelperRow,
+  CustomFunctionRow,
 } from "./models";
 import { useWorkspaceNavigation } from "./hooks";
 import {
@@ -60,6 +60,12 @@ type DeleteConfirmation = {
   title: string;
   message: string;
   onConfirm: () => void | Promise<void>;
+};
+type CustomFunctionDraft = {
+  id: string;
+  name: string;
+  description: string;
+  value: string;
 };
 
 export default function App() {
@@ -175,12 +181,14 @@ export default function App() {
   const [connectionTestPending, setConnectionTestPending] = useState(false);
   const [connectingBrokerId, setConnectingBrokerId] = useState("");
   const [showPassword, setShowPassword] = useState(false);
-  const [helperDraft, setHelperDraft] = useState({
+  const [customFunctionModal, setCustomFunctionModal] = useState(false);
+  const [customFunctionDraft, setCustomFunctionDraft] = useState<CustomFunctionDraft>({
     id: "",
-    name: "requestId",
-    kind: "uuid" as TemplateHelperRow["kind"],
-    configJson: "{}",
+    name: "",
+    description: "",
+    value: "",
   });
+  const [customFunctionError, setCustomFunctionError] = useState("");
   const [liveMessages, setLiveMessages] = useState<ConsumerMessageEvent[]>([]);
   const [unreadConsumerMessages, setUnreadConsumerMessages] = useState(0);
   const [historyLogs, setHistoryLogs] = useState<MessageLogRow[]>([]);
@@ -405,7 +413,7 @@ export default function App() {
   const variableCollections = bootstrap?.variableCollections ?? [];
   const variables = bootstrap?.variables ?? [];
   const brokers = bootstrap?.brokers ?? [];
-  const helpers = bootstrap?.helpers ?? [];
+  const customFunctions = bootstrap?.customFunctions ?? [];
   const consumerSessions = bootstrap?.consumerSessions ?? [];
   const logs = historyLogs;
   const publishLogCount = logs.filter(
@@ -1512,25 +1520,52 @@ export default function App() {
     setBrokerDraft(emptyBrokerDraft());
   };
 
-  const saveHelper = async () => {
-    if (helperDraft.id) {
-      await client.helpers.update(helperDraft.id, helperDraft);
-    } else {
-      await client.helpers.create(helperDraft);
-    }
-    await refresh();
+  const openCustomFunctionModal = (customFunction?: CustomFunctionRow) => {
+    setCustomFunctionDraft(
+      customFunction
+        ? {
+            id: customFunction.id,
+            name: customFunction.name,
+            description: customFunction.description ?? "",
+            value: customFunction.value,
+          }
+        : { id: "", name: "", description: "", value: "" },
+    );
+    setCustomFunctionError("");
+    setCustomFunctionModal(true);
   };
 
-  const deleteHelper = async () => {
-    if (!helperDraft.id) return;
-    await client.helpers.remove(helperDraft.id);
-    setHelperDraft({
-      id: "",
-      name: "requestId",
-      kind: "uuid",
-      configJson: "{}",
-    });
-    await refresh();
+  const saveCustomFunction = async () => {
+    try {
+      const payload = {
+        name: customFunctionDraft.name.trim(),
+        description: customFunctionDraft.description.trim() || null,
+        value: customFunctionDraft.value,
+      };
+      if (customFunctionDraft.id) {
+        await client.customFunctions.update(customFunctionDraft.id, payload);
+      } else {
+        await client.customFunctions.create(payload);
+      }
+      await refresh();
+      setCustomFunctionModal(false);
+      toast.success("Custom function saved.");
+    } catch (err) {
+      setCustomFunctionError(
+        err instanceof Error ? err.message : "Unable to save custom function",
+      );
+    }
+  };
+
+  const deleteCustomFunction = (customFunction: CustomFunctionRow) => {
+    askDeleteConfirmation(
+      "Delete custom function",
+      `Delete {{${customFunction.name}}}?`,
+      async () => {
+        await client.customFunctions.remove(customFunction.id);
+        await refresh();
+      },
+    );
   };
 
   const handleCollectionMenuToggle = (collectionId: string, anchor: HTMLElement) => {
@@ -2078,6 +2113,59 @@ export default function App() {
                         <pre>{`{"sequence":"{{sequence:1:6}}"}`}</pre>
                       </div>
                     </div>
+                    <div className="custom-functions-section">
+                      <div className="section-head">
+                        <div className="section-title-stack">
+                          <span>Custom functions</span>
+                          <small>Reusable values for topic and payload templates.</small>
+                        </div>
+                        <button
+                          className="icon-button"
+                          aria-label="Add custom function"
+                          title="Add custom function"
+                          onClick={() => openCustomFunctionModal()}
+                        >
+                          +
+                        </button>
+                      </div>
+                      <div className="function-list custom-function-list">
+                        {customFunctions.length === 0 ? (
+                          <span className="card-sub">No custom functions yet.</span>
+                        ) : (
+                          customFunctions.map((customFunction) => (
+                            <div className="function-row custom-function-row" key={customFunction.id}>
+                              <div className="custom-function-content">
+                                <code>{`{{${customFunction.name}}}`}</code>
+                                {customFunction.description && <span>{customFunction.description}</span>}
+                                <pre>{customFunction.value}</pre>
+                              </div>
+                              <div className="custom-function-actions">
+                                <button
+                                  className="icon-button"
+                                  aria-label={`Edit ${customFunction.name}`}
+                                  title="Edit custom function"
+                                  onClick={() => openCustomFunctionModal(customFunction)}
+                                >
+                                  <svg viewBox="0 0 24 24" aria-hidden="true">
+                                    <path d="m4 16.5 9.8-9.8 2.5 2.5-9.8 9.8L4 19Zm11-11 1.4-1.4a1.8 1.8 0 0 1 2.5 2.5l-1.4 1.4" />
+                                  </svg>
+                                </button>
+                                <button
+                                  className="icon-button danger"
+                                  aria-label={`Delete ${customFunction.name}`}
+                                  title="Delete custom function"
+                                  onClick={() => deleteCustomFunction(customFunction)}
+                                >
+                                  <svg viewBox="0 0 24 24" aria-hidden="true">
+                                    <path d="M5 7h14M10 11v6M14 11v6M9 7V4h6v3m-9 0 1 13h8l1-13" />
+                                  </svg>
+                                </button>
+                              </div>
+                            </div>
+                          ))
+                        )}
+                      </div>
+                    </div>
                   </div>
                 </div>
               )}
@@ -2272,6 +2360,90 @@ export default function App() {
                     : collectionModal === "import"
                       ? "Import"
                       : "Save changes"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {customFunctionModal && (
+        <div
+          className="modal-backdrop"
+          role="presentation"
+          onMouseDown={() => setCustomFunctionModal(false)}
+        >
+          <div
+            className="modal-card custom-function-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="custom-function-modal-title"
+            onMouseDown={(event) => event.stopPropagation()}
+          >
+            <div className="section-head">
+              <div>
+                <div id="custom-function-modal-title" className="card-title">
+                  {customFunctionDraft.id ? "Edit custom function" : "New custom function"}
+                </div>
+                <div className="card-sub">
+                  Use built-ins, Variables, or other custom functions in Value.
+                </div>
+              </div>
+              <button
+                className="icon-button"
+                aria-label="Close"
+                onClick={() => setCustomFunctionModal(false)}
+              >
+                ×
+              </button>
+            </div>
+            <label>
+              Name
+              <input
+                autoFocus
+                value={customFunctionDraft.name}
+                onChange={(event) =>
+                  setCustomFunctionDraft({
+                    ...customFunctionDraft,
+                    name: event.target.value.replace(/[^A-Za-z0-9_]/g, ""),
+                  })
+                }
+              />
+            </label>
+            <label>
+              Description
+              <input
+                value={customFunctionDraft.description}
+                onChange={(event) =>
+                  setCustomFunctionDraft({
+                    ...customFunctionDraft,
+                    description: event.target.value,
+                  })
+                }
+              />
+            </label>
+            <label>
+              Value
+              <textarea
+                rows={6}
+                value={customFunctionDraft.value}
+                onChange={(event) =>
+                  setCustomFunctionDraft({
+                    ...customFunctionDraft,
+                    value: event.target.value,
+                  })
+                }
+              />
+            </label>
+            {customFunctionError && (
+              <div className="form-error">{customFunctionError}</div>
+            )}
+            <div className="button-row modal-actions">
+              <button onClick={() => setCustomFunctionModal(false)}>Cancel</button>
+              <button
+                className="primary"
+                disabled={!customFunctionDraft.name.trim()}
+                onClick={() => void saveCustomFunction()}
+              >
+                Save
               </button>
             </div>
           </div>

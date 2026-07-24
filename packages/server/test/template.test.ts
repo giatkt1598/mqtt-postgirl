@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { resolveTemplatePayload } from "../src/template";
 import { listBuiltinFunctions } from "../src/template/functions";
 
-const context = { variableCollection: {}, variables: {}, helpers: {}, sequenceOffset: 0 };
+const context = { variableCollection: {}, variables: {}, customFunctions: {}, sequenceOffset: 0 };
 
 test("resolves now token inside json string", () => {
   const result = resolveTemplatePayload('{"publishDate":"{{now}}"}', context);
@@ -41,6 +41,18 @@ test("does not resolve the removed var token", () => {
 test("does not resolve the removed env token", () => {
   const result = resolveTemplatePayload('{"name":"{{env.NAME}}"}', { ...context, variableCollection: { NAME: "mqtt" } });
   assert.equal((result.value as Record<string, unknown>).name, "{{env.NAME}}");
+});
+
+test("resolves nested custom functions with variables and built-ins", () => {
+  const result = resolveTemplatePayload('{"value":"{{requestValue}}"}', {
+    ...context,
+    variableCollection: { API_KEY: "secret" },
+    customFunctions: {
+      requestValue: { id: "request", name: "requestValue", description: null, value: "key-$API_KEY-{{suffix}}", createdAt: "now", updatedAt: "now" },
+      suffix: { id: "suffix", name: "suffix", description: null, value: "{{uuid}}", createdAt: "now", updatedAt: "now" },
+    },
+  });
+  assert.match(String((result.value as Record<string, unknown>).value), /^key-secret-[0-9a-f-]{36}$/);
 });
 
 test("resolves padded sequence token with batch offset", () => {

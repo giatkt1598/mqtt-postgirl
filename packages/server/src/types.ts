@@ -67,14 +67,12 @@ export interface BrokerProfileRow {
   updatedAt: string;
 }
 
-export type HelperKind = "literal" | "now" | "uuid" | "randomInt" | "env";
-
-export interface TemplateHelperRow {
+export interface CustomFunctionRow {
   [key: string]: unknown;
   id: Id;
   name: string;
-  kind: HelperKind;
-  configJson: string;
+  description: string | null;
+  value: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -115,7 +113,7 @@ export interface BootstrapState {
   variableCollections: VariableCollectionRow[];
   variables: VariableRow[];
   brokers: BrokerProfileRow[];
-  helpers: TemplateHelperRow[];
+  customFunctions: CustomFunctionRow[];
   consumerSessions: ConsumerSessionRow[];
   logs: MessageLogRow[];
 }

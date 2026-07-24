@@ -5,7 +5,7 @@ import {
   ConsumerSessionRow,
   MessageLogRow,
   RequestRow,
-  TemplateHelperRow,
+  CustomFunctionRow,
   VariableCollectionRow,
   VariableRow,
 } from "../models";
@@ -195,12 +195,12 @@ export const apiClient = {
       request<{ ok: true }>("/brokers/test", { method: "POST", body: JSON.stringify(payload) }),
     disconnect: (id: string) => request<void>(`/brokers/${id}/disconnect`, { method: "POST" }),
   },
-  helpers: {
+  customFunctions: {
     create: (payload: Record<string, unknown>) =>
-      request<TemplateHelperRow>("/helpers", { method: "POST", body: JSON.stringify(payload) }),
+      request<CustomFunctionRow>("/custom-functions", { method: "POST", body: JSON.stringify(payload) }),
     update: (id: string, payload: Record<string, unknown>) =>
-      request<TemplateHelperRow>(`/helpers/${id}`, { method: "PUT", body: JSON.stringify(payload) }),
-    remove: (id: string) => request<void>(`/helpers/${id}`, { method: "DELETE" }),
+      request<CustomFunctionRow>(`/custom-functions/${id}`, { method: "PUT", body: JSON.stringify(payload) }),
+    remove: (id: string) => request<void>(`/custom-functions/${id}`, { method: "DELETE" }),
   },
   batchPublish: (payload: Record<string, unknown>) =>
     request<{

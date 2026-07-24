@@ -1,9 +1,9 @@
-import { TemplateHelperRow } from "../types";
+import { CustomFunctionRow } from "../types";
 
 export interface TemplateContext {
   variableCollection: Record<string, unknown>;
   variables: Record<string, unknown>;
-  helpers: Record<string, TemplateHelperRow>;
+  customFunctions: Record<string, CustomFunctionRow>;
   sequenceOffset: number;
 }
 
