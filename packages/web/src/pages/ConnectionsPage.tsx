@@ -30,6 +30,7 @@ export interface ConnectionsPageProps {
     lastError: string | null;
   }>;
   activeConnectionId: string;
+  connectingBrokerId: string;
   connectionView: "list" | "form";
   brokerDraft: BrokerDraft;
   connectionTestMessage: { type: "success" | "error"; text: string } | null;
@@ -54,11 +55,28 @@ export interface ConnectionsPageProps {
   onBackToPublishers: () => void;
 }
 
+function brokerEndpoint(broker: BrokerProfileRow): string {
+  const protocol = broker.protocol.replace("://", "");
+  const isWebSocket = protocol === "ws" || protocol === "wss";
+  const isEncrypted =
+    Boolean(broker.encryption) || protocol === "mqtts" || protocol === "wss";
+  const transport = isEncrypted
+    ? isWebSocket
+      ? "wss"
+      : "mqtts"
+    : isWebSocket
+      ? "ws"
+      : "mqtt";
+
+  return `${transport}://${broker.host}:${broker.port}`;
+}
+
 export function ConnectionsPage(): ReactNode {
   const {
     brokers,
     brokerStatuses,
     activeConnectionId,
+    connectingBrokerId,
     connectionView,
     brokerDraft,
     connectionTestMessage,
@@ -118,6 +136,7 @@ export function ConnectionsPage(): ReactNode {
                   (item) => item.profileId === broker.id,
                 );
                 const isActive = broker.id === activeConnectionId;
+                const isConnecting = broker.id === connectingBrokerId;
                 return (
                   <div
                     key={broker.id}
@@ -126,17 +145,10 @@ export function ConnectionsPage(): ReactNode {
                     <div className="connection-details">
                       <strong className="connection-name">{broker.name}</strong>
                       <small className="connection-endpoint">
-                        {broker.host}:{broker.port} · {broker.protocol}
+                        {brokerEndpoint(broker)}
                       </small>
-                      <small
-                        className={
-                          status?.connected
-                            ? "connection-status connected"
-                            : "connection-status"
-                        }
-                      >
-                        {status?.connected ? "connected" : "disconnected"}
-                        {status?.lastError ? ` · ${status.lastError}` : ""}
+                      <small className="connection-auth">
+                        {broker.username?.trim() || "(No Auth)"}
                       </small>
                     </div>
                     <div className="button-row">
@@ -153,10 +165,15 @@ export function ConnectionsPage(): ReactNode {
                       )}
                       <button
                         className={status?.connected ? "connected" : "primary"}
-                        disabled={status?.connected === true}
+                        disabled={status?.connected === true || Boolean(connectingBrokerId)}
+                        aria-busy={isConnecting}
                         onClick={() => connectBroker(broker.id)}
                       >
-                        {status?.connected ? "Connected" : "Connect"}
+                        {status?.connected
+                          ? "Connected"
+                          : isConnecting
+                            ? "Connecting..."
+                            : "Connect"}
                       </button>
                     </div>
                   </div>

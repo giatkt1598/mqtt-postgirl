@@ -1,6 +1,6 @@
 import mqtt, { IClientOptions, MqttClient } from "mqtt";
 import { AppRepositories } from "./repositories";
-import { BrokerProfileRow, ConsumerSessionRow } from "./types";
+import { ConsumerSessionRow } from "./types";
 import { topicMatches, validatePublishTopic } from "./topic";
 import { createId, safeJsonParse } from "./utils";
 import { ResolvedTemplate } from "./template";
@@ -12,6 +12,9 @@ export type RealtimeEvent =
   | { type: "broker.status"; payload: unknown };
 
 export type PublishOptions = { qos: number; retain: boolean };
+
+const BROKER_CONNECTION_TIMEOUT_MS = 10_000;
+const BROKER_CONNECTION_ERROR = "Unable to connect to MQTT broker";
 
 export type BrokerConnectionConfig = {
   host: string;
@@ -86,18 +89,13 @@ export class RuntimeService {
   }
 
   async testBrokerConfig(config: BrokerConnectionConfig) {
-    const client = mqtt.connect(`${this.transportProtocol(config)}://${config.host}:${config.port}`, { ...this.buildOptionsFromConnection(config), clientId: `mqtt-postwoman-test-${createId().slice(0, 12)}`, reconnectPeriod: 0, connectTimeout: 10000 });
+    const client = this.createBrokerClient(config);
     try {
-      await new Promise<void>((resolve, reject) => {
-        let settled = false;
-        const timeout = setTimeout(() => finish(() => reject(new Error("MQTT connection timed out after 10 seconds"))), 10000);
-        const finish = (handler: () => void) => { if (settled) return; settled = true; clearTimeout(timeout); handler(); };
-        client.once("connect", () => finish(resolve));
-        client.once("error", (error) => finish(() => reject(new Error(brokerErrorMessage(error, "Unable to test MQTT connection")))));
-        client.once("close", () => finish(() => reject(new Error("MQTT connection closed before it was established"))));
-      });
+      await this.awaitBrokerConnection(client);
       return { ok: true };
-    } finally { client.end(true); }
+    } finally {
+      client.end(true);
+    }
   }
 
   async disconnectBroker(profileId: string) {
@@ -118,7 +116,7 @@ export class RuntimeService {
   getBrokerStatus(profileId: string): BrokerConnectionStatus { const broker = this.brokers.get(profileId); return { profileId, connected: Boolean(broker?.connected), refCount: broker?.refCount ?? 0, lastError: broker?.lastError ?? null }; }
 
   private buildOptionsFromConnection(profile: BrokerConnectionConfig): IClientOptions {
-    const options: IClientOptions = { clientId: profile.clientId ?? "mqtt-postwoman-temp", clean: Boolean(profile.clean ?? true), keepalive: profile.keepAlive ?? 30, reconnectPeriod: profile.reconnectPeriod ?? 1000, connectTimeout: 10000 };
+    const options: IClientOptions = { clientId: profile.clientId ?? "mqtt-postwoman-temp", clean: Boolean(profile.clean ?? true), keepalive: profile.keepAlive ?? 30, reconnectPeriod: profile.reconnectPeriod ?? 1000, connectTimeout: BROKER_CONNECTION_TIMEOUT_MS };
     if (profile.username) options.username = profile.username;
     if (profile.password) options.password = profile.password;
     if (this.isEncrypted(profile)) {
@@ -133,7 +131,27 @@ export class RuntimeService {
 
   private isEncrypted(profile: BrokerConnectionConfig) { return Boolean(profile.encryption) || profile.protocol === "mqtts" || profile.protocol === "wss"; }
   private transportProtocol(profile: BrokerConnectionConfig) { const protocol = profile.protocol.replace("://", ""); if (this.isEncrypted(profile)) return protocol === "ws" || protocol === "wss" ? "wss" : "mqtts"; return protocol === "ws" ? "ws" : "mqtt"; }
-  private buildOptions(profile: BrokerProfileRow) { return this.buildOptionsFromConnection(profile); }
+  private connectionUrl(profile: BrokerConnectionConfig) { return `${this.transportProtocol(profile)}://${profile.host}:${profile.port}`; }
+  private createBrokerClient(profile: BrokerConnectionConfig) { return mqtt.connect(this.connectionUrl(profile), this.buildOptionsFromConnection(profile)); }
+
+  private awaitBrokerConnection(client: MqttClient) {
+    return new Promise<void>((resolve, reject) => {
+      let settled = false;
+      const finish = (handler: () => void) => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timeout);
+        handler();
+      };
+      const timeout = setTimeout(
+        () => finish(() => reject(new Error("MQTT connection timed out after 10 seconds"))),
+        BROKER_CONNECTION_TIMEOUT_MS,
+      );
+      client.once("connect", () => finish(resolve));
+      client.once("error", (error) => finish(() => reject(new Error(brokerErrorMessage(error, BROKER_CONNECTION_ERROR)))));
+      client.once("close", () => finish(() => reject(new Error("MQTT connection closed before it was established"))));
+    });
+  }
 
   private async ensureBroker(profileId: string) {
     const profile = await this.repositories.getBroker(profileId);
@@ -143,19 +161,23 @@ export class RuntimeService {
       if (!existing.connected) { this.brokers.delete(profileId); existing.client.end(true); }
       else { existing.refCount += 1; await existing.ready; return existing; }
     }
-    const client = mqtt.connect(`${this.transportProtocol(profile)}://${profile.host}:${profile.port}`, this.buildOptions(profile));
+    const client = this.createBrokerClient(profile);
     const broker: ActiveBroker = { client, ready: Promise.resolve(), subscriptions: new Set<string>(), refCount: 1, connected: false, lastError: null };
-    broker.ready = new Promise<void>((resolve, reject) => {
-      let settled = false;
-      const timeout = setTimeout(() => onError(new Error("MQTT connection timed out after 10 seconds")), 10000);
-      const onConnect = () => { if (settled) return; settled = true; clearTimeout(timeout); broker.connected = true; broker.lastError = null; this.broadcast({ type: "broker.status", payload: { profileId, status: "connected" } }); resolve(); };
-      const onError = (error: unknown) => { if (settled) return; settled = true; clearTimeout(timeout); const message = brokerErrorMessage(error, "Unable to connect to MQTT broker"); broker.lastError = message; this.broadcast({ type: "broker.status", payload: { profileId, status: "error", error: message } }); reject(new Error(message)); };
-      const onInitialClose = () => { if (settled) return; settled = true; clearTimeout(timeout); const message = "MQTT connection closed before it was established"; broker.lastError = message; reject(new Error(message)); };
-      client.once("connect", onConnect); client.once("error", onError); client.once("close", onInitialClose);
-      client.on("reconnect", () => this.broadcast({ type: "broker.status", payload: { profileId, status: "reconnecting" } }));
-      client.on("close", () => { broker.connected = false; this.broadcast({ type: "broker.status", payload: { profileId, status: "closed" } }); });
-      client.on("message", (topic, message, packet) => { void this.handleIncomingMessage(profileId, topic, message, packet?.messageId?.toString() ?? null); });
-    });
+    broker.ready = this.awaitBrokerConnection(client)
+      .then(() => {
+        broker.connected = true;
+        broker.lastError = null;
+        this.broadcast({ type: "broker.status", payload: { profileId, status: "connected" } });
+      })
+      .catch((error: unknown) => {
+        const message = brokerErrorMessage(error, BROKER_CONNECTION_ERROR);
+        broker.lastError = message;
+        this.broadcast({ type: "broker.status", payload: { profileId, status: "error", error: message } });
+        throw new Error(message);
+      });
+    client.on("reconnect", () => this.broadcast({ type: "broker.status", payload: { profileId, status: "reconnecting" } }));
+    client.on("close", () => { broker.connected = false; this.broadcast({ type: "broker.status", payload: { profileId, status: "closed" } }); });
+    client.on("message", (topic, message, packet) => { void this.handleIncomingMessage(profileId, topic, message, packet?.messageId?.toString() ?? null); });
     this.brokers.set(profileId, broker);
     try { await broker.ready; } catch (error) { if (this.brokers.get(profileId) === broker) this.brokers.delete(profileId); broker.client.end(true); throw error; }
     return broker;

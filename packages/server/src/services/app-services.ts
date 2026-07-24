@@ -57,10 +57,14 @@ export class AppServices {
   }
 }
 
+const persistedBoolean = z
+  .union([z.boolean(), z.literal(0), z.literal(1)])
+  .transform((value) => value === true || value === 1);
+
 export const schemas = {
   collection: z.object({ id: z.string().optional(), name: z.string().min(1), description: z.string().optional().nullable(), variableCollectionId: z.string().optional().nullable() }),
   request: z.object({ id: z.string().optional(), collectionId: z.string().min(1), name: z.string().min(1), topic: z.string().default(""), payloadTemplate: z.string().default("{}"), qos: z.number().int().min(0).max(2).default(0), retain: z.boolean().default(false), brokerProfileId: z.string().optional().nullable() }),
   variableCollection: z.object({ id: z.string().optional(), name: z.string().trim().min(1) }),
   variable: z.object({ id: z.string().optional(), variableCollectionId: z.string().min(1), name: z.string().trim().min(1), value: z.string().default(""), sortOrder: z.number().int().nonnegative().optional() }),
-  broker: z.object({ id: z.string().optional(), name: z.string().min(1), host: z.string().min(1), port: z.number().int().min(1).max(65535), protocol: z.enum(["mqtt", "ws", "mqtts", "wss"]).default("mqtt"), validateCertificate: z.boolean().default(true), encryption: z.boolean().default(false), username: z.string().optional().nullable(), password: z.string().optional().nullable(), clientId: z.string().optional(), clean: z.boolean().default(true), keepAlive: z.number().int().min(1).max(3600).default(30), reconnectPeriod: z.number().int().min(250).max(60000).default(1000), caCert: z.string().optional().nullable(), clientCert: z.string().optional().nullable(), clientKey: z.string().optional().nullable() }),
+  broker: z.object({ id: z.string().optional(), name: z.string().min(1), host: z.string().min(1), port: z.number().int().min(1).max(65535), protocol: z.enum(["mqtt", "ws", "mqtts", "wss"]).default("mqtt"), validateCertificate: persistedBoolean.default(true), encryption: persistedBoolean.default(false), username: z.string().optional().nullable(), password: z.string().optional().nullable(), clientId: z.string().optional(), clean: persistedBoolean.default(true), keepAlive: z.number().int().min(1).max(3600).default(30), reconnectPeriod: z.number().int().min(250).max(60000).default(1000), caCert: z.string().optional().nullable(), clientCert: z.string().optional().nullable(), clientKey: z.string().optional().nullable() }),
 };

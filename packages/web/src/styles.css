@@ -1132,13 +1132,9 @@ h1 {
 }
 
 .connection-endpoint,
-.connection-status {
+.connection-auth {
   color: var(--muted);
   overflow-wrap: anywhere;
-}
-
-.connection-status.connected {
-  color: #9ef3e7;
 }
 
 .empty-state {

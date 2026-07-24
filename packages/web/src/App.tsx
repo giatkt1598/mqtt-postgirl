@@ -172,6 +172,7 @@ export default function App() {
     text: string;
   } | null>(null);
   const [connectionTestPending, setConnectionTestPending] = useState(false);
+  const [connectingBrokerId, setConnectingBrokerId] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [helperDraft, setHelperDraft] = useState({
     id: "",
@@ -1344,8 +1345,8 @@ export default function App() {
     const payload = {
       ...brokerPayload,
       name: brokerDraft.name,
-      validateCertificate: brokerDraft.validateCertificate,
-      encryption: brokerDraft.encryption,
+      validateCertificate: Boolean(brokerDraft.validateCertificate),
+      encryption: Boolean(brokerDraft.encryption),
       username: brokerDraft.username || null,
       password: brokerDraft.password || null,
       clientId: brokerDraft.clientId || `mqtt-postwoman-${Date.now()}`,
@@ -1363,7 +1364,9 @@ export default function App() {
   };
 
   const connectBroker = async (brokerId: string) => {
+    if (connectingBrokerId) return;
     setError("");
+    setConnectingBrokerId(brokerId);
     try {
       const activeConsumerSessionIds = consumerSessions
         .filter((session) => Boolean(session.active))
@@ -1397,6 +1400,8 @@ export default function App() {
           ? err.message
           : "Unable to connect to MQTT broker",
       );
+    } finally {
+      setConnectingBrokerId("");
     }
   };
 
@@ -1409,8 +1414,8 @@ export default function App() {
       await client.brokers.test({
         ...brokerPayload,
         name: brokerDraft.name,
-        validateCertificate: brokerDraft.validateCertificate,
-        encryption: brokerDraft.encryption,
+        validateCertificate: Boolean(brokerDraft.validateCertificate),
+        encryption: Boolean(brokerDraft.encryption),
         username: brokerDraft.username || null,
         password: brokerDraft.password || null,
         clientId: brokerDraft.clientId || undefined,
@@ -1452,9 +1457,9 @@ export default function App() {
       port: broker.port,
       protocol:
         broker.protocol === "ws" || broker.protocol === "wss" ? "ws" : "mqtt",
-      validateCertificate: broker.validateCertificate,
+      validateCertificate: Boolean(broker.validateCertificate),
       encryption:
-        broker.encryption ||
+        Boolean(broker.encryption) ||
         broker.protocol === "mqtts" ||
         broker.protocol === "wss",
       username: broker.username ?? "",
@@ -1597,6 +1602,7 @@ export default function App() {
     brokers,
     brokerStatuses,
     activeConnectionId,
+    connectingBrokerId,
     connectionView,
     brokerDraft,
     connectionTestMessage,
