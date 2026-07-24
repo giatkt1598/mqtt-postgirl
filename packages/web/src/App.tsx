@@ -68,6 +68,17 @@ type CustomFunctionDraft = {
   value: string;
 };
 
+const builtinFunctionPreviewTokens = [
+  { id: "now", template: '{"publishDate":"{{now:yyyy-MM-dd}}"}' },
+  { id: "uuid", template: '{"requestId":"{{uuid}}"}' },
+  { id: "sequence", template: '{"sequence":"{{sequence:1:6}}"}' },
+] as const;
+
+function inlinePreview(result: { text: string; json: unknown }) {
+  if (result.json === null) return result.text;
+  return JSON.stringify(result.json) ?? result.text;
+}
+
 export default function App() {
   const [bootstrap, setBootstrap] = useState<BootstrapState | null>(null);
   const [brokerStatuses, setBrokerStatuses] = useState<
@@ -189,6 +200,12 @@ export default function App() {
     value: "",
   });
   const [customFunctionError, setCustomFunctionError] = useState("");
+  const [customFunctionPreviews, setCustomFunctionPreviews] = useState<
+    Record<string, string>
+  >({});
+  const [builtinFunctionPreviews, setBuiltinFunctionPreviews] = useState<
+    Record<string, string>
+  >({});
   const [liveMessages, setLiveMessages] = useState<ConsumerMessageEvent[]>([]);
   const [unreadConsumerMessages, setUnreadConsumerMessages] = useState(0);
   const [historyLogs, setHistoryLogs] = useState<MessageLogRow[]>([]);
@@ -497,6 +514,69 @@ export default function App() {
     description: customFunction.description,
     value: customFunction.value,
   }));
+
+  useEffect(() => {
+    let cancelled = false;
+    if (!bootstrap) return () => {
+      cancelled = true;
+    };
+    if (customFunctions.length === 0) {
+      setCustomFunctionPreviews({});
+      return () => {
+        cancelled = true;
+      };
+    }
+
+    void Promise.all(
+      customFunctions.map(async (customFunction) => {
+        try {
+          const resolved = await client.resolveTemplate({
+            template: JSON.stringify({ custom: `{{${customFunction.name}}}` }),
+            variableCollectionId: selectedCollection?.variableCollectionId ?? null,
+            variables: {},
+          });
+          return [customFunction.id, inlinePreview(resolved)] as const;
+        } catch (err) {
+          return [
+            customFunction.id,
+            err instanceof Error ? err.message : "Unable to render preview",
+          ] as const;
+        }
+      }),
+    ).then((entries) => {
+      if (!cancelled) setCustomFunctionPreviews(Object.fromEntries(entries));
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [bootstrap?.customFunctions, selectedCollection?.variableCollectionId]);
+
+  useEffect(() => {
+    let cancelled = false;
+    void Promise.all(
+      builtinFunctionPreviewTokens.map(async ({ id, template }) => {
+        try {
+          const resolved = await client.resolveTemplate({
+            template,
+            variableCollectionId: selectedCollection?.variableCollectionId ?? null,
+            variables: {},
+          });
+          return [id, inlinePreview(resolved)] as const;
+        } catch (err) {
+          return [
+            id,
+            err instanceof Error ? err.message : "Unable to render preview",
+          ] as const;
+        }
+      }),
+    ).then((entries) => {
+      if (!cancelled) setBuiltinFunctionPreviews(Object.fromEntries(entries));
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedCollection?.variableCollectionId]);
 
   const updateCollectionVariables = async (variableCollectionId: string) => {
     if (!selectedCollection) return;
@@ -2104,11 +2184,19 @@ export default function App() {
                           Current time, optionally formatted with Day.js tokens.
                         </span>
                         <pre>{`{"publishDate":"{{now:yyyy-MM-dd}}"}`}</pre>
+                        <div className="custom-function-preview-label">Preview:</div>
+                        <pre className="custom-function-preview">
+                          {builtinFunctionPreviews.now ?? "Rendering..."}
+                        </pre>
                       </div>
                       <div className="function-row">
                         <code>{`{{uuid}}`}</code>
                         <span>Generates a new UUID for each message.</span>
                         <pre>{`{"requestId":"{{uuid}}"}`}</pre>
+                        <div className="custom-function-preview-label">Preview:</div>
+                        <pre className="custom-function-preview">
+                          {builtinFunctionPreviews.uuid ?? "Rendering..."}
+                        </pre>
                       </div>
                       <div className="function-row">
                         <code>{`{{sequence:<start>:<numberOfDigits>}}`}</code>
@@ -2117,6 +2205,10 @@ export default function App() {
                           value.
                         </span>
                         <pre>{`{"sequence":"{{sequence:1:6}}"}`}</pre>
+                        <div className="custom-function-preview-label">Preview:</div>
+                        <pre className="custom-function-preview">
+                          {builtinFunctionPreviews.sequence ?? "Rendering..."}
+                        </pre>
                       </div>
                     </div>
                     <div className="custom-functions-section">
@@ -2144,6 +2236,10 @@ export default function App() {
                                 <code>{`{{${customFunction.name}}}`}</code>
                                 {customFunction.description && <span>{customFunction.description}</span>}
                                 <pre>{JSON.stringify({ custom: customFunction.value })}</pre>
+                                <div className="custom-function-preview-label">Preview:</div>
+                                <pre className="custom-function-preview">
+                                  {customFunctionPreviews[customFunction.id] ?? "Rendering..."}
+                                </pre>
                               </div>
                               <div className="custom-function-actions">
                                 <button

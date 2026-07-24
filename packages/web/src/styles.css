@@ -829,6 +829,17 @@ h1 {
   stroke-width: 1.8;
 }
 
+.custom-function-preview-label {
+  color: var(--muted);
+  font-size: 0.74rem;
+  font-weight: 700;
+}
+
+.function-row pre.custom-function-preview {
+  background: #0a0e17;
+  color: #d6deeb;
+}
+
 .custom-function-modal {
   width: min(560px, calc(100vw - 2rem));
 }
