@@ -40,10 +40,10 @@ async function main() {
   });
 
   const port = Number(process.env.PORT ?? 3000);
-  server.listen(port, () => console.log(`MQTT -PostGirl running on http://localhost:${port}`));
+  server.listen(port, () => console.log(`MQTT - PostGirl running on http://localhost:${port}`));
 }
 
 main().catch((error) => {
-  console.error("Unable to start MQTT -PostGirl", error);
+  console.error("Unable to start MQTT - PostGirl", error);
   process.exitCode = 1;
 });

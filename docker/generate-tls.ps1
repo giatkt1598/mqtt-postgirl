@@ -6,7 +6,7 @@ New-Item -ItemType Directory -Force -Path $certDirectory | Out-Null
 openssl req -x509 -newkey rsa:4096 -sha256 -nodes `
   -keyout (Join-Path $certDirectory "ca.key") `
   -out (Join-Path $certDirectory "ca.crt") `
-  -days 3650 -subj "/CN=MQTT -PostGirl Local CA"
+  -days 3650 -subj "/CN=MQTT - PostGirl Local CA"
 
 openssl req -newkey rsa:2048 -nodes `
   -keyout (Join-Path $certDirectory "server.key") `
