@@ -1,10 +1,16 @@
-import archiver = require("archiver");
 import unzipper from "unzipper";
 import { AppRepositories } from "../repositories";
 import { CollectionRow, RequestRow } from "../types";
 
 const MAX_IMPORT_BYTES = 10 * 1024 * 1024;
-type ArchiverFactory = (format: "zip", options: { zlib: { level: number } }) => archiver.Archiver;
+type ZipArchive = {
+  on(event: "data", listener: (chunk: Buffer) => void): ZipArchive;
+  once(event: "end", listener: () => void): ZipArchive;
+  once(event: "error", listener: (error: Error) => void): ZipArchive;
+  append(source: string, data: { name: string }): void;
+  finalize(): Promise<void>;
+};
+type ArchiverFactory = (format: "zip", options: { zlib: { level: number } }) => ZipArchive;
 
 export interface ImportedRequest {
   name: string;
@@ -121,7 +127,9 @@ export class CollectionTransferService {
     const variables = variableCollection
       ? await this.repositories.listVariables(variableCollection.id)
       : [];
-    const archive = (archiver as unknown as ArchiverFactory)("zip", { zlib: { level: 9 } });
+    const archiverModule = await import("archiver");
+    const createArchive: unknown = Reflect.get(archiverModule, "default");
+    const archive = (createArchive as unknown as ArchiverFactory)("zip", { zlib: { level: 9 } });
     const chunks: Buffer[] = [];
     archive.on("data", (chunk: Buffer) => chunks.push(chunk));
     const completed = new Promise<Buffer>((resolve, reject) => {
