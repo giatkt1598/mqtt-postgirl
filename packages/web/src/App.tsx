@@ -2259,7 +2259,7 @@ export default function App() {
                     onClick={() =>
                       askDeleteConfirmation(
                         "Delete request",
-                        "Delete this MQTT request?",
+                        `Delete request "${draft.name}"?`,
                         deleteRequest,
                       )
                     }
