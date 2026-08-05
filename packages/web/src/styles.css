@@ -156,6 +156,9 @@ label {
     rgba(12, 17, 33, 1),
     rgba(12, 17, 33, 0.96)
   );
+  color: inherit;
+  cursor: pointer;
+  text-decoration: none;
 }
 
 .brand-mark {

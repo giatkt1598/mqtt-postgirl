@@ -75,7 +75,7 @@ export function CollectionSidebar() {
   } = useWorkspaceContext();
   return (
     <aside className="sidebar">
-      <div className="brand">
+      <a className="brand" href="/" aria-label="Go to MQTT - PostGirl home">
         <div className="brand-mark">
           <img src="/favicon.png" />
         </div>
@@ -83,7 +83,7 @@ export function CollectionSidebar() {
           <div className="brand-title">MQTT - PostGirl</div>
           <div className="brand-sub">Local-first MQTT control room</div>
         </div>
-      </div>
+      </a>
       <div className="sidebar-panel">
         <ScrollArea className="collection-scroll-area">
           <div className="panel-header">
