@@ -46,6 +46,7 @@ import {
   PayloadFormat,
 } from "./models";
 import { useWorkspaceNavigation } from "./hooks";
+import { variableNamePattern } from "./utils/variableTokens";
 import {
   WorkspaceProvider,
   type VariableDraftRow,
@@ -70,6 +71,15 @@ type CustomFunctionDraft = {
   description: string;
   value: string;
 };
+
+const emptyVariableRow = (): VariableDraftRow => ({ name: "", value: "" });
+
+function withTrailingVariableRow(rows: VariableDraftRow[]) {
+  const lastRow = rows[rows.length - 1];
+  return !lastRow || lastRow.name || lastRow.value
+    ? [...rows, emptyVariableRow()]
+    : rows;
+}
 
 const builtinFunctionPreviewTokens = [
   { id: "now", template: '{"publishDate":"{{now:yyyy-MM-dd}}"}' },
@@ -224,6 +234,14 @@ export default function App() {
     id: "",
     name: "",
   });
+  const [inspectorVariableRows, setInspectorVariableRows] = useState<
+    VariableDraftRow[]
+  >([emptyVariableRow()]);
+  const [inspectorVariableCollectionId, setInspectorVariableCollectionId] =
+    useState("");
+  const [inspectorVariablesModified, setInspectorVariablesModified] =
+    useState(false);
+  const [inspectorVariablesError, setInspectorVariablesError] = useState("");
   const [brokerDraft, setBrokerDraft] = useState(emptyBrokerDraft());
   const [connectionTestMessage, setConnectionTestMessage] = useState<{
     type: "success" | "error";
@@ -585,6 +603,44 @@ export default function App() {
   const selectedCollection = collections.find(
     (collection) => collection.id === selectedCollectionId,
   );
+  const requestVariableCollectionId =
+    selectedCollection?.variableCollectionId ?? "";
+  const requestVariableCollection = variableCollections.find(
+    (collection) => collection.id === requestVariableCollectionId,
+  );
+
+  useEffect(() => {
+    if (
+      inspectorVariableCollectionId === requestVariableCollectionId &&
+      inspectorVariablesModified
+    ) {
+      return;
+    }
+
+    const rows = requestVariableCollectionId
+      ? variables
+          .filter(
+            (variable) =>
+              variable.variableCollectionId === requestVariableCollectionId,
+          )
+          .map((variable) => ({
+            id: variable.id,
+            name: variable.name,
+            value: variable.value,
+          }))
+      : [];
+
+    setInspectorVariableCollectionId(requestVariableCollectionId);
+    setInspectorVariableRows(withTrailingVariableRow(rows));
+    setInspectorVariablesModified(false);
+    setInspectorVariablesError("");
+  }, [
+    inspectorVariableCollectionId,
+    inspectorVariablesModified,
+    requestVariableCollectionId,
+    variables,
+  ]);
+
   const payloadEditorLanguage =
     draft.payloadFormat === "raw" ? "plaintext" : draft.payloadFormat;
 
@@ -606,15 +662,62 @@ export default function App() {
       }
     });
   };
-  const payloadEditorVariables = selectedCollection?.variableCollectionId
-    ? variables
-        .filter(
-          (variable) =>
-            String(variable.variableCollectionId) ===
-            String(selectedCollection.variableCollectionId),
-        )
-        .map((variable) => ({ name: variable.name, value: variable.value }))
-    : [];
+  const payloadEditorVariables = useMemo(
+    () =>
+      requestVariableCollectionId === inspectorVariableCollectionId
+        ? inspectorVariableRows
+            .filter((variable) => variable.name.trim())
+            .map((variable) => ({
+              name: variable.name.trim(),
+              value: variable.value,
+            }))
+        : variables
+            .filter(
+              (variable) =>
+                variable.variableCollectionId === requestVariableCollectionId,
+            )
+            .map((variable) => ({ name: variable.name, value: variable.value })),
+    [
+      inspectorVariableCollectionId,
+      inspectorVariableRows,
+      requestVariableCollectionId,
+      variables,
+    ],
+  );
+  const requestVariableValues = useMemo(
+    () => Object.fromEntries(payloadEditorVariables.map(({ name, value }) => [name, value])),
+    [payloadEditorVariables],
+  );
+  const inspectorVariablesDirty = useMemo(() => {
+    const persistedRows = requestVariableCollectionId
+      ? variables
+          .filter(
+            (variable) =>
+              variable.variableCollectionId === requestVariableCollectionId,
+          )
+          .map((variable) => ({
+            id: variable.id,
+            name: variable.name,
+            value: variable.value,
+          }))
+      : [];
+    const draftRows = inspectorVariableRows.filter(
+      (row) => row.name.trim() || row.value,
+    );
+
+    return (
+      persistedRows.length !== draftRows.length ||
+      persistedRows.some((row, index) => {
+        const draftRow = draftRows[index];
+        return (
+          !draftRow ||
+          row.id !== draftRow.id ||
+          row.name !== draftRow.name ||
+          row.value !== draftRow.value
+        );
+      })
+    );
+  }, [inspectorVariableRows, requestVariableCollectionId, variables]);
   const payloadEditorCustomFunctions = customFunctions.map((customFunction) => ({
     name: customFunction.name,
     description: customFunction.description,
@@ -639,7 +742,7 @@ export default function App() {
           const resolved = await client.resolveTemplate({
             template: JSON.stringify({ custom: `{{${customFunction.name}}}` }),
             variableCollectionId: selectedCollection?.variableCollectionId ?? null,
-            variables: {},
+            variables: requestVariableValues,
           });
           return [customFunction.id, inlinePreview(resolved)] as const;
         } catch (err) {
@@ -656,7 +759,11 @@ export default function App() {
     return () => {
       cancelled = true;
     };
-  }, [bootstrap?.customFunctions, selectedCollection?.variableCollectionId]);
+  }, [
+    bootstrap?.customFunctions,
+    requestVariableValues,
+    selectedCollection?.variableCollectionId,
+  ]);
 
   useEffect(() => {
     let cancelled = false;
@@ -666,7 +773,7 @@ export default function App() {
           const resolved = await client.resolveTemplate({
             template,
             variableCollectionId: selectedCollection?.variableCollectionId ?? null,
-            variables: {},
+            variables: requestVariableValues,
           });
           return [id, inlinePreview(resolved)] as const;
         } catch (err) {
@@ -682,7 +789,7 @@ export default function App() {
     return () => {
       cancelled = true;
     };
-  }, [selectedCollection?.variableCollectionId]);
+  }, [requestVariableValues, selectedCollection?.variableCollectionId]);
 
   const updateCollectionVariables = async (variableCollectionId: string) => {
     if (!selectedCollection) return;
@@ -1336,7 +1443,7 @@ export default function App() {
       delayMs: batchDelayMs,
       qos: draft.qos,
       retain: draft.retain,
-      variables: {},
+      variables: requestVariableValues,
     });
     const publishedLogs = result.results
       .filter((item) => item.ok && item.log)
@@ -1625,6 +1732,93 @@ export default function App() {
     }
     await client.variableCollections.reorderVariables(collectionId, persistedIds);
     await refresh();
+  };
+
+  const resetInspectorVariables = () => {
+    const rows = requestVariableCollectionId
+      ? variables
+          .filter(
+            (variable) =>
+              variable.variableCollectionId === requestVariableCollectionId,
+          )
+          .map((variable) => ({
+            id: variable.id,
+            name: variable.name,
+            value: variable.value,
+          }))
+      : [];
+    setInspectorVariableCollectionId(requestVariableCollectionId);
+    setInspectorVariableRows(withTrailingVariableRow(rows));
+    setInspectorVariablesModified(false);
+    setInspectorVariablesError("");
+  };
+
+  const updateInspectorVariableRow = (
+    index: number,
+    field: "name" | "value",
+    value: string,
+  ) => {
+    setInspectorVariableRows((current) => {
+      const next = current.map((row, rowIndex) =>
+        rowIndex === index
+          ? {
+              ...row,
+              [field]:
+                field === "name"
+                  ? value.replace(/[^A-Za-z0-9_]/g, "")
+                  : value,
+            }
+          : row,
+      );
+      return withTrailingVariableRow(next);
+    });
+    setInspectorVariablesModified(true);
+    setInspectorVariablesError("");
+  };
+
+  const removeInspectorVariableRow = (index: number) => {
+    setInspectorVariableRows((current) =>
+      withTrailingVariableRow(
+        current.filter((_, rowIndex) => rowIndex !== index),
+      ),
+    );
+    setInspectorVariablesModified(true);
+    setInspectorVariablesError("");
+  };
+
+  const saveInspectorVariables = async () => {
+    if (!requestVariableCollectionId) return;
+    const rows = inspectorVariableRows.filter((row) => row.name.trim() || row.value);
+
+    if (rows.some((row) => !row.name.trim())) {
+      setInspectorVariablesError("Variable name is required when a value is entered.");
+      return;
+    }
+    if (rows.some((row) => !variableNamePattern.test(row.name.trim()))) {
+      setInspectorVariablesError(
+        "Variable name may only contain letters, numbers, and underscores.",
+      );
+      return;
+    }
+    const names = rows.map((row) => row.name.trim());
+    if (new Set(names).size !== names.length) {
+      setInspectorVariablesError(
+        "Variable names must be unique within a collection.",
+      );
+      return;
+    }
+
+    try {
+      setInspectorVariablesError("");
+      await saveVariables(requestVariableCollectionId, inspectorVariableRows);
+      setInspectorVariablesModified(false);
+    } catch (saveError) {
+      setInspectorVariablesError(
+        saveError instanceof Error
+          ? saveError.message
+          : "Unable to save variables.",
+      );
+    }
   };
 
   const saveBroker = async () => {
@@ -2031,7 +2225,13 @@ export default function App() {
                   <div className="card-sub">MQTT message</div>
                 </div>
                 <div className="button-row">
-                  <button onClick={saveRequest}>Save</button>
+                  <button
+                    className="request-save-button"
+                    disabled={!selectedRequestModified}
+                    onClick={saveRequest}
+                  >
+                    Save
+                  </button>
                   <div
                     ref={discardControlRef}
                     className="request-discard-control"
@@ -2047,11 +2247,11 @@ export default function App() {
                         }
                       }}
                     >
-                      {discardConfirmOpen ? "Confirm" : "Discard changes"}
+                      {discardConfirmOpen ? "Confirm" : "Reset"}
                     </button>
                     {discardConfirmOpen && (
                       <div className="request-discard-popover" role="status">
-                        Discard all unsaved changes?
+                        Reset all unsaved changes?
                       </div>
                     )}
                   </div>
@@ -2222,6 +2422,12 @@ export default function App() {
                   onClick={() => setRightTab("functions")}
                 >
                   Functions
+                </button>
+                <button
+                  className={rightTab === "variables" ? "active" : ""}
+                  onClick={() => setRightTab("variables")}
+                >
+                  Variables
                 </button>
               </div>
 
@@ -2509,6 +2715,131 @@ export default function App() {
                       </div>
                     </div>
                     </ScrollArea>
+                  </div>
+                </div>
+              )}
+
+              {rightTab === "variables" && (
+                <div className="stack inspector-variables-section">
+                  <div className="card-section">
+                    <div className="section-head">
+                      <div className="section-title-stack">
+                        <span className="inspector-variables-title">
+                          Variables
+                          {inspectorVariablesDirty && (
+                            <i className="modified-label">(Modified)</i>
+                          )}
+                        </span>
+                        <small>
+                          {requestVariableCollection
+                            ? requestVariableCollection.name
+                            : "No Variable Collection selected"}
+                        </small>
+                      </div>
+                      <div className="button-row">
+                        <button
+                          disabled={
+                            !requestVariableCollectionId ||
+                            !inspectorVariablesDirty
+                          }
+                          onClick={() => void saveInspectorVariables()}
+                        >
+                          Save
+                        </button>
+                        <button
+                          disabled={!inspectorVariablesDirty}
+                          onClick={resetInspectorVariables}
+                        >
+                          Reset
+                        </button>
+                      </div>
+                    </div>
+
+                    {!requestVariableCollectionId ? (
+                      <div className="empty-state inspector-variables-empty">
+                        <strong>No Variable Collection</strong>
+                        <small>
+                          Select a Variable Collection for this collection to
+                          manage its values here.
+                        </small>
+                      </div>
+                    ) : (
+                      <>
+                        {inspectorVariablesError && (
+                          <div className="error-banner variables-error">
+                            {inspectorVariablesError}
+                          </div>
+                        )}
+                        <ScrollArea className="inspector-variables-scroll-area">
+                          <div className="variable-table" role="table">
+                            <div
+                              className="variable-table-row variable-table-head"
+                              role="row"
+                            >
+                              <span role="columnheader">Variable</span>
+                              <span role="columnheader">Value</span>
+                            </div>
+                            {inspectorVariableRows.map((row, index) => {
+                              const isTrailingRow =
+                                index === inspectorVariableRows.length - 1 &&
+                                !row.id;
+                              return (
+                                <div
+                                  className="variable-table-row"
+                                  role="row"
+                                  key={row.id ?? `inspector-new-${index}`}
+                                >
+                                  <input
+                                    aria-label={`Variable ${index + 1}`}
+                                    placeholder={
+                                      isTrailingRow
+                                        ? "Add Variable"
+                                        : "Variable"
+                                    }
+                                    value={row.name}
+                                    onChange={(event) =>
+                                      updateInspectorVariableRow(
+                                        index,
+                                        "name",
+                                        event.target.value,
+                                      )
+                                    }
+                                  />
+                                  <div className="variable-value-cell">
+                                    <input
+                                      aria-label={`Value ${index + 1}`}
+                                      placeholder="Value"
+                                      value={row.value}
+                                      onChange={(event) =>
+                                        updateInspectorVariableRow(
+                                          index,
+                                          "value",
+                                          event.target.value,
+                                        )
+                                      }
+                                    />
+                                    {!isTrailingRow && (
+                                      <button
+                                        className="icon-button variable-delete-button"
+                                        aria-label={`Delete variable ${row.name}`}
+                                        title="Delete variable"
+                                        onClick={() =>
+                                          removeInspectorVariableRow(index)
+                                        }
+                                      >
+                                        <svg viewBox="0 0 24 24" aria-hidden="true">
+                                          <path d="M5 7h14M10 11v6M14 11v6M9 7V4h6v3m-9 0 1 13h8l1-13" />
+                                        </svg>
+                                      </button>
+                                    )}
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </ScrollArea>
+                      </>
+                    )}
                   </div>
                 </div>
               )}

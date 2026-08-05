@@ -20,7 +20,8 @@ function resolveVariableToken(token: string, context: TemplateContext) {
   const name = names[0];
   if (!name) return `$${token}`;
 
-  const resolved = context.variableCollection[name] ?? context.variables[name] ?? "";
+  // Request-scoped values are transient overrides for the selected collection.
+  const resolved = context.variables[name] ?? context.variableCollection[name] ?? "";
   return `${valueToText(resolved)}${token.slice(name.length)}`;
 }
 

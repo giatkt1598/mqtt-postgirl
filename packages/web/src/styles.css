@@ -215,7 +215,8 @@ label {
 
 .collection-scroll-area,
 .log-scroll-area,
-.function-scroll-area {
+.function-scroll-area,
+.inspector-variables-scroll-area {
   flex: 1 1 auto;
   min-height: 0;
 }
@@ -230,12 +231,14 @@ label {
 }
 
 .log-scroll-area,
-.function-scroll-area {
+.function-scroll-area,
+.inspector-variables-scroll-area {
   margin-right: -0.9rem;
 }
 
 .log-scroll-area .scroll-area-content,
-.function-scroll-area .scroll-area-content {
+.function-scroll-area .scroll-area-content,
+.inspector-variables-scroll-area .scroll-area-content {
   padding-right: 0.9rem;
 }
 
@@ -875,6 +878,12 @@ h1 {
   font-weight: 400;
 }
 
+.inspector-variables-title {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.35rem;
+}
+
 .function-list {
   display: grid;
   gap: 0.75rem;
@@ -1442,6 +1451,27 @@ h1 {
   overscroll-behavior: contain;
 }
 
+.inspector-card .inspector-variables-scroll-area {
+  flex: 1 1 0;
+  min-height: 0;
+  overscroll-behavior: contain;
+}
+
+.inspector-card .inspector-variables-scroll-area .variable-table {
+  margin-top: 0;
+}
+
+.inspector-variables-empty {
+  flex: 1;
+  min-height: 12rem;
+}
+
+.inspector-variables-section button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  filter: saturate(0.25);
+}
+
 .request-editor-empty {
   min-height: 520px;
   display: grid;
@@ -1502,11 +1532,16 @@ h1 {
 }
 
 .request-discard-control > button {
-  width: 9.5rem;
+  width: 5.5rem;
   white-space: nowrap;
 }
 
 .request-discard-control button:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
+.request-save-button:disabled {
   cursor: not-allowed;
   opacity: 0.45;
 }

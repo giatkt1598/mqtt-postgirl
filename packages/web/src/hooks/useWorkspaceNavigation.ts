@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 export type WorkspaceTab = "publishers" | "consumers" | "variables" | "connections";
 export type ConnectionView = "list" | "form";
-export type InspectorTab = "history" | "functions";
+export type InspectorTab = "history" | "functions" | "variables";
 
 type WorkspaceRoute = {
   mainTab: WorkspaceTab;
@@ -35,7 +35,12 @@ function readRoute(): WorkspaceRoute {
     selectedCollectionId: params.get("collection") ?? "",
     selectedRequestId: requestId,
     selectedVariableCollectionId: params.get("variableCollection") ?? "",
-    rightTab: params.get("panel") === "functions" ? "functions" : "history",
+    rightTab:
+      params.get("panel") === "functions"
+        ? "functions"
+        : params.get("panel") === "variables"
+          ? "variables"
+          : "history",
     connectionView:
       mainTab === "connections" && connection !== null ? "form" : "list",
     connectionId: connection === "new" || connection === null ? "" : connection,
