@@ -293,6 +293,22 @@ label {
   gap: 0.75rem;
 }
 
+.log-top {
+  min-width: 0;
+}
+
+.log-top strong {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.log-top span {
+  flex: 0 0 auto;
+}
+
 .collection-list,
 .request-list,
 .mini-list,
@@ -2083,6 +2099,8 @@ pre {
 
 .inspector-card .log-row {
   height: fit-content;
+  max-width: 100%;
+  min-width: 0;
 }
 
 .log-row.consume {

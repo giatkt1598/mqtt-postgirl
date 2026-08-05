@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { resolveTemplatePayload } from "../src/template";
+import { resolveTemplatePayload, resolveTemplateText } from "../src/template";
 import { listBuiltinFunctions } from "../src/template/functions";
 
 const context = { variableCollection: {}, variables: {}, customFunctions: {}, sequenceOffset: 0 };
@@ -31,6 +31,11 @@ test("preserves dollar text that does not match a variable", () => {
     variableCollection: { NAME: "mqtt" },
   });
   assert.equal(topic.text, "device/$notAVariable/status");
+});
+
+test("preserves a long numeric topic as text", () => {
+  const topic = "123456789012345678901234567890";
+  assert.equal(resolveTemplateText(topic, context), topic);
 });
 
 test("does not resolve the removed var token", () => {

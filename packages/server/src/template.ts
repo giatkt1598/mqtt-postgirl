@@ -57,13 +57,26 @@ function resolveDeep(value: unknown, context: TemplateContext): unknown {
   return value;
 }
 
-export function resolveTemplatePayload(template: string, context?: Partial<TemplateContext>): ResolvedTemplate {
-  const fullContext: TemplateContext = {
+function createTemplateContext(context?: Partial<TemplateContext>): TemplateContext {
+  return {
     variableCollection: context?.variableCollection ?? {},
     variables: context?.variables ?? {},
     customFunctions: context?.customFunctions ?? {},
     sequenceOffset: context?.sequenceOffset ?? 0,
   };
+}
+
+// MQTT topics are always text. Parsing a numeric topic as JSON can turn it
+// into scientific notation and accidentally introduce a plus sign.
+export function resolveTemplateText(
+  template: string,
+  context?: Partial<TemplateContext>,
+): string {
+  return replaceInString(template, createTemplateContext(context));
+}
+
+export function resolveTemplatePayload(template: string, context?: Partial<TemplateContext>): ResolvedTemplate {
+  const fullContext = createTemplateContext(context);
   const parsed = safeJsonParse(template);
   const resolved = resolveDeep(parsed ?? template, fullContext);
   if (typeof resolved === "string") {

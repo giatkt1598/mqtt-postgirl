@@ -1,7 +1,11 @@
 import { z } from "zod";
 import { AppRepositories } from "../repositories";
 import { RuntimeService } from "../runtime";
-import { createCustomFunctionMap, resolveTemplatePayload } from "../template";
+import {
+  createCustomFunctionMap,
+  resolveTemplatePayload,
+  resolveTemplateText,
+} from "../template";
 import { parseObjectLike } from "../utils";
 
 export type CollectionInput = { id?: string | undefined; name: string; description?: string | null | undefined; variableCollectionId?: string | null | undefined };
@@ -29,6 +33,31 @@ export class AppServices {
     return resolveTemplatePayload(template, { variableCollection: values, variables: parseObjectLike(variables), customFunctions, sequenceOffset });
   }
 
+  async resolveTopic(
+    topic: string,
+    variableCollectionId: string | null | undefined,
+    variables: Record<string, unknown>,
+    sequenceOffset = 0,
+  ) {
+    const values = variableCollectionId
+      ? Object.fromEntries(
+          (await this.repos.listVariables(variableCollectionId)).map((item) => [
+            item.name,
+            item.value,
+          ]),
+        )
+      : {};
+    const customFunctions = createCustomFunctionMap(
+      await this.repos.listCustomFunctions(),
+    );
+    return resolveTemplateText(topic, {
+      variableCollection: values,
+      variables: parseObjectLike(variables),
+      customFunctions,
+      sequenceOffset,
+    });
+  }
+
   async publish(input: PublishInput) {
     const request = input.requestId ? await this.repos.getRequest(input.requestId) : undefined;
     if (input.requestId && !request) throw new Error("Request not found");
@@ -39,10 +68,15 @@ export class AppServices {
     const topic = input.topic ?? request?.topic ?? "";
     if (!topic) throw new Error("Topic is required");
     const variables = parseObjectLike(input.variables);
-    const resolvedTopic = await this.resolve(topic, variableCollectionId, variables, input._sequenceOffset ?? 0);
-    if (!resolvedTopic.text.trim()) throw new Error("Topic is required");
+    const resolvedTopic = await this.resolveTopic(
+      topic,
+      variableCollectionId,
+      variables,
+      input._sequenceOffset ?? 0,
+    );
+    if (!resolvedTopic.trim()) throw new Error("Topic is required");
     const payload = await this.resolve(input.payloadTemplate ?? request?.payloadTemplate ?? "{}", variableCollectionId, variables, input._sequenceOffset ?? 0);
-    return this.runtime.publish(brokerProfileId, resolvedTopic.text, payload, { qos: input.qos ?? request?.qos ?? 0, retain: input.retain ?? Boolean(request?.retain) }, input.requestId ?? request?.id ?? null, variables);
+    return this.runtime.publish(brokerProfileId, resolvedTopic, payload, { qos: input.qos ?? request?.qos ?? 0, retain: input.retain ?? Boolean(request?.retain) }, input.requestId ?? request?.id ?? null, variables);
   }
 
   async batchPublish(input: BatchPublishInput) {

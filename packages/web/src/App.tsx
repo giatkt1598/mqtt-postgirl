@@ -2597,7 +2597,7 @@ export default function App() {
                             className={`log-row ${log.direction}`}
                           >
                             <div className="log-top">
-                              <strong>{log.topic}</strong>
+                              <strong title={log.topic}>{log.topic}</strong>
                               <span>{log.direction}</span>
                             </div>
                             <small>{formatTime(log.createdAt)}</small>
