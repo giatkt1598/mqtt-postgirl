@@ -52,7 +52,6 @@ import {
   type WorkspaceContextValue,
 } from "./contexts";
 
-type RightTab = "history" | "functions";
 type CollectionModal = "create" | "edit" | "import" | null;
 type InactiveConsumerTopic = {
   key: string;
@@ -125,8 +124,14 @@ export default function App() {
     setSelectedCollectionId,
     selectedRequestId,
     setSelectedRequestId,
+    selectedVariableCollectionId,
+    setSelectedVariableCollectionId,
+    rightTab,
+    setRightTab,
     connectionView,
     setConnectionView,
+    connectionId,
+    setConnectionId,
   } = useWorkspaceNavigation();
   const [expandedCollectionIds, setExpandedCollectionIds] = useState<string[]>(
     () => {
@@ -165,7 +170,6 @@ export default function App() {
   const [activeConnectionId, setActiveConnectionId] = useState<string>(
     () => localStorage.getItem("mqtt.activeConnectionId") ?? "",
   );
-  const [rightTab, setRightTab] = useState<RightTab>("history");
   const [draft, setDraft] = useState<DraftRequest>(emptyDraft());
   const [requestDrafts, setRequestDrafts] = useState<
     Record<string, DraftRequest>
@@ -216,8 +220,6 @@ export default function App() {
   const [draggedCollectionId, setDraggedCollectionId] = useState<string | null>(null);
   const [dragOverRequestId, setDragOverRequestId] = useState<string | null>(null);
   const [dragOverCollectionId, setDragOverCollectionId] = useState<string | null>(null);
-  const [selectedVariableCollectionId, setSelectedVariableCollectionId] =
-    useState("");
   const [variableCollectionDraft, setVariableCollectionDraft] = useState({
     id: "",
     name: "",
@@ -559,6 +561,26 @@ export default function App() {
       );
     }
   }, [draft]);
+
+  useEffect(() => {
+    if (!bootstrap || !selectedRequestId) return;
+    const request = bootstrap.requests.find(
+      (item) => item.id === selectedRequestId,
+    );
+    if (!request) return;
+    if (selectedCollectionId !== request.collectionId) {
+      setSelectedCollectionId(request.collectionId);
+    }
+    if (draft.id !== request.id) {
+      setDraft(requestDrafts[request.id] ?? requestToDraft(request));
+    }
+  }, [
+    bootstrap,
+    draft.id,
+    requestDrafts,
+    selectedCollectionId,
+    selectedRequestId,
+  ]);
 
   const selectedCollection = collections.find(
     (collection) => collection.id === selectedCollectionId,
@@ -1627,6 +1649,7 @@ export default function App() {
     }
     await refresh();
     setConnectionView("list");
+    setConnectionId("");
   };
 
   const connectBroker = async (brokerId: string) => {
@@ -1710,6 +1733,7 @@ export default function App() {
     setBrokerDraft(emptyBrokerDraft());
     setConnectionTestMessage(null);
     setShowPassword(false);
+    setConnectionId("");
     setConnectionView("form");
   };
 
@@ -1738,11 +1762,38 @@ export default function App() {
       clientCert: broker.clientCert ?? "",
       clientKey: broker.clientKey ?? "",
     });
+    setConnectionId(broker.id);
     setConnectionView("form");
   };
 
+  useEffect(() => {
+    if (
+      mainTab !== "connections" ||
+      connectionView !== "form" ||
+      !connectionId ||
+      !bootstrap ||
+      brokerDraft.id === connectionId
+    ) {
+      return;
+    }
+    const broker = brokers.find((item) => item.id === connectionId);
+    if (broker) {
+      openEditConnection(broker);
+      return;
+    }
+    setConnectionView("list");
+  }, [
+    bootstrap,
+    brokerDraft.id,
+    brokers,
+    connectionId,
+    connectionView,
+    mainTab,
+  ]);
+
   const cancelConnectionForm = () => {
     setConnectionView("list");
+    setConnectionId("");
     setBrokerDraft(emptyBrokerDraft());
     setConnectionTestMessage(null);
     setShowPassword(false);
