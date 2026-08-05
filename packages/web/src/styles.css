@@ -1497,6 +1497,49 @@ h1 {
   min-width: 0;
 }
 
+.request-discard-control {
+  position: relative;
+}
+
+.request-discard-control > button {
+  width: 9.5rem;
+  white-space: nowrap;
+}
+
+.request-discard-control button:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
+.request-discard-popover {
+  position: absolute;
+  z-index: 1001;
+  top: calc(100% + 0.45rem);
+  right: 0;
+  width: max-content;
+  max-width: 16rem;
+  padding: 0.55rem 0.7rem;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: #151d35;
+  box-shadow: var(--shadow);
+  color: var(--text);
+  font-size: 0.78rem;
+  white-space: nowrap;
+}
+
+.request-discard-popover::before {
+  position: absolute;
+  top: -0.45rem;
+  right: 3.7rem;
+  width: 0;
+  height: 0;
+  border-right: 0.45rem solid transparent;
+  border-bottom: 0.45rem solid #151d35;
+  border-left: 0.45rem solid transparent;
+  content: "";
+}
+
 .request-name-line {
   display: flex;
   align-items: baseline;

@@ -145,6 +145,8 @@ export default function App() {
   const [importError, setImportError] = useState("");
   const [collectionMenuId, setCollectionMenuId] = useState<string | null>(null);
   const [requestMenuId, setRequestMenuId] = useState<string | null>(null);
+  const [discardConfirmOpen, setDiscardConfirmOpen] = useState(false);
+  const discardControlRef = useRef<HTMLDivElement | null>(null);
   const [popoverPosition, setPopoverPosition] = useState<{
     top: number;
     left: number;
@@ -386,6 +388,25 @@ export default function App() {
       String(watchConsumerLogs),
     );
   }, [watchConsumerLogs]);
+
+  useEffect(() => {
+    if (!discardConfirmOpen) return;
+    const closeOnOutsideClick = (event: MouseEvent) => {
+      const target = event.target;
+      if (
+        target instanceof Node &&
+        !discardControlRef.current?.contains(target)
+      ) {
+        setDiscardConfirmOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", closeOnOutsideClick);
+    return () => document.removeEventListener("mousedown", closeOnOutsideClick);
+  }, [discardConfirmOpen]);
+
+  useEffect(() => {
+    setDiscardConfirmOpen(false);
+  }, [selectedRequestId]);
 
   useEffect(() => {
     let ws: WebSocket | null = null;
@@ -1173,6 +1194,19 @@ export default function App() {
       delete next[saved.id];
       return next;
     });
+    setDiscardConfirmOpen(false);
+  };
+
+  const discardRequestChanges = () => {
+    if (!selectedRequestRecord) return;
+    setDraft(requestToDraft(selectedRequestRecord));
+    setRequestDrafts((current) => {
+      const next = { ...current };
+      delete next[selectedRequestRecord.id];
+      return next;
+    });
+    setTopicValidationError(false);
+    setDiscardConfirmOpen(false);
   };
 
   const deleteRequest = async () => {
@@ -1947,6 +1981,29 @@ export default function App() {
                 </div>
                 <div className="button-row">
                   <button onClick={saveRequest}>Save</button>
+                  <div
+                    ref={discardControlRef}
+                    className="request-discard-control"
+                  >
+                    <button
+                      type="button"
+                      disabled={!selectedRequestModified}
+                      onClick={() => {
+                        if (discardConfirmOpen) {
+                          discardRequestChanges();
+                        } else {
+                          setDiscardConfirmOpen(true);
+                        }
+                      }}
+                    >
+                      {discardConfirmOpen ? "Confirm" : "Discard changes"}
+                    </button>
+                    {discardConfirmOpen && (
+                      <div className="request-discard-popover" role="status">
+                        Discard all unsaved changes?
+                      </div>
+                    )}
+                  </div>
                   <button
                     onClick={() =>
                       askDeleteConfirmation(
